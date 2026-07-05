@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  stock-accumulator-notion:
+    build: .
+    container_name: stock-accumulator-notion
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: ${PORT:-3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      APP_CONFIG_FILE: /app/data/.env
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      NOTION_PARENT_PAGE_ID: ${NOTION_PARENT_PAGE_ID:-}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
