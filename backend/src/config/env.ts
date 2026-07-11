@@ -10,8 +10,19 @@ const projectRoot = fs.existsSync(path.resolve(process.cwd(), "backend/package.j
 
 export const envFilePath = process.env.APP_CONFIG_FILE || path.resolve(projectRoot, ".env");
 
-dotenv.config({ path: envFilePath });
-dotenv.config();
+const applyEnvFile = (filePath: string) => {
+  if (!fs.existsSync(filePath)) return;
+
+  const parsed = dotenv.parse(fs.readFileSync(filePath));
+  for (const [key, value] of Object.entries(parsed)) {
+    if (process.env[key] === undefined || process.env[key] === "") {
+      process.env[key] = value;
+    }
+  }
+};
+
+applyEnvFile(envFilePath);
+applyEnvFile(path.resolve(projectRoot, ".env"));
 
 const booleanEnv = z
   .string()

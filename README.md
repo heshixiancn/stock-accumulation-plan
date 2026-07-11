@@ -199,6 +199,7 @@ NOTION_DIVIDEND_DATABASE_ID=
 NOTION_TRADE_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_DATABASE_ID=
+PORT=3000
 HOST_PORT=6080
 CORS_ORIGIN=http://localhost:6080
 NPM_REGISTRY=https://registry.npmjs.org/
@@ -220,7 +221,13 @@ docker-compose up -d --build
 http://localhost:6080
 ```
 
-也可以不提前创建 `.env`。容器会启动首次接入向导，配置会持久化到宿主机的 `./data/.env`。
+Docker Compose 会通过 `env_file: .env` 将 `.env` 中的配置注入为容器环境变量。`.env` 文件必须存在；如果想使用首次接入向导，可以保留 Notion 相关字段为空，向导保存后的配置会持久化到宿主机 `./data/.env`。
+
+环境变量优先级说明：
+
+- `.env` 中非空的值优先级最高，适合固定部署配置。
+- `./data/.env` 会保存应用初始化出的 Notion 数据库 ID；当 `.env` 中对应字段为空时，容器重启后会自动用 `./data/.env` 补齐。
+- 容器内服务端口固定为 `PORT=3000`，宿主机访问端口用 `HOST_PORT` 控制。
 
 默认 Docker 端口映射是宿主机 `6080` -> 容器内 `3000`。如果要换宿主机端口，只改 `.env` 里的 `HOST_PORT`，不要改容器内 `PORT`。不要使用 `6000`，多数浏览器会将它作为不安全端口拦截。
 

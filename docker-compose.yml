@@ -5,18 +5,15 @@ services:
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     container_name: stock-accumulator-notion
+    env_file:
+      - .env
     ports:
       - "${HOST_PORT:-6080}:3000"
     environment:
+      # Keep the container port stable. Change HOST_PORT in .env for host access.
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:6080}
       APP_CONFIG_FILE: /app/data/.env
-      NOTION_TOKEN: ${NOTION_TOKEN:-}
-      NOTION_PARENT_PAGE_ID: ${NOTION_PARENT_PAGE_ID:-}
-      AUTO_MARKET_SYNC_ENABLED: ${AUTO_MARKET_SYNC_ENABLED:-true}
-      AUTO_MARKET_SYNC_TIME: ${AUTO_MARKET_SYNC_TIME:-16:10}
-      AUTO_MARKET_SYNC_TIMEZONE: ${AUTO_MARKET_SYNC_TIMEZONE:-Asia/Shanghai}
-      AUTO_MARKET_SYNC_STATE_FILE: ${AUTO_MARKET_SYNC_STATE_FILE:-}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
