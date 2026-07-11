@@ -8,10 +8,12 @@ import { Tabs } from "./components/ui/tabs";
 import { api } from "./api/client";
 import { useDashboard } from "./hooks/use-dashboard";
 import { useDividends } from "./hooks/use-dividends";
+import { useOtherInvestments } from "./hooks/use-other-investments";
 import { useStocks } from "./hooks/use-stocks";
+import { useTrades } from "./hooks/use-trades";
 import "./index.css";
 import { DashboardPage } from "./pages/dashboard-page";
-import { DividendsPage } from "./pages/dividends-page";
+import { OtherInvestmentsPage } from "./pages/other-investments-page";
 import { SetupPage } from "./pages/setup-page";
 import { StocksPage } from "./pages/stocks-page";
 
@@ -25,6 +27,8 @@ const ConfiguredApp = () => {
   const dashboard = useDashboard(isInitialized);
   const stocks = useStocks(isInitialized);
   const dividends = useDividends(isInitialized);
+  const trades = useTrades(isInitialized);
+  const otherInvestments = useOtherInvestments(isInitialized);
 
   const initializeDatabases = async (manual = false) => {
     setIsInitializing(true);
@@ -37,6 +41,8 @@ const ConfiguredApp = () => {
         dashboard.refetch(),
         stocks.query.refetch(),
         dividends.query.refetch(),
+        trades.query.refetch(),
+        otherInvestments.query.refetch(),
       ]);
       const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
       setInitMessage(`${response.message}（${time}）`);
@@ -59,12 +65,13 @@ const ConfiguredApp = () => {
           value={tab}
           onChange={setTab}
           items={[
-            { label: "Dashboard", value: "dashboard" },
+            { label: "总览", value: "dashboard" },
             { label: "攒股计划", value: "stocks" },
-            { label: "股息记录", value: "dividends" },
+            { label: "其他投资", value: "other-investments" },
           ]}
         />
         <Button
+          className="hidden lg:inline-flex"
           variant="secondary"
           disabled={isInitializing}
           onClick={() => void initializeDatabases(true)}
@@ -74,18 +81,20 @@ const ConfiguredApp = () => {
         </Button>
       </div>
 
-      <Card className="mb-6 border-primary/15 bg-white/75">
-        <CardContent className="flex items-center justify-between gap-3 p-4 text-sm">
-          <span>启动状态：{initMessage || "正在检查 Notion 数据库..."}</span>
-          <span className="text-muted-foreground">删除操作均带二次确认</span>
-        </CardContent>
-      </Card>
-
       {tab === "dashboard" && dashboard.data && <DashboardPage data={dashboard.data} />}
       {tab === "stocks" && (
         <StocksPage
           stocks={stocks.query.data ?? []}
+          trades={trades.query.data ?? []}
+          dividends={dividends.query.data ?? []}
           submitting={stocks.createMutation.isPending || stocks.updateMutation.isPending}
+          tradeSubmitting={
+            trades.createMutation.isPending || trades.updateMutation.isPending || trades.deleteMutation.isPending
+          }
+          dividendSubmitting={
+            dividends.createMutation.isPending || dividends.updateMutation.isPending || dividends.deleteMutation.isPending
+          }
+          marketSubmitting={stocks.syncMarketMutation.isPending || stocks.syncMarketsMutation.isPending}
           onCreate={async (payload) => {
             await stocks.createMutation.mutateAsync(payload);
           }}
@@ -95,20 +104,57 @@ const ConfiguredApp = () => {
           onDelete={async (id) => {
             await stocks.deleteMutation.mutateAsync(id);
           }}
-        />
-      )}
-      {tab === "dividends" && (
-        <DividendsPage
-          dividends={dividends.query.data ?? []}
-          submitting={dividends.createMutation.isPending || dividends.updateMutation.isPending}
-          onCreate={async (payload) => {
+          onCreateTrade={async (payload) => {
+            await trades.createMutation.mutateAsync(payload);
+          }}
+          onUpdateTrade={async (id, payload) => {
+            await trades.updateMutation.mutateAsync({ id, payload });
+          }}
+          onDeleteTrade={async (id) => {
+            await trades.deleteMutation.mutateAsync(id);
+          }}
+          onCreateDividend={async (payload) => {
             await dividends.createMutation.mutateAsync(payload);
           }}
-          onUpdate={async (id, payload) => {
+          onUpdateDividend={async (id, payload) => {
             await dividends.updateMutation.mutateAsync({ id, payload });
           }}
-          onDelete={async (id) => {
+          onDeleteDividend={async (id) => {
             await dividends.deleteMutation.mutateAsync(id);
+          }}
+          onSyncMarkets={async (ids) => {
+            return stocks.syncMarketsMutation.mutateAsync(ids);
+          }}
+        />
+      )}
+      {tab === "other-investments" && (
+        <OtherInvestmentsPage
+          data={otherInvestments.query.data}
+          submitting={
+            otherInvestments.createMutation.isPending ||
+            otherInvestments.updateMutation.isPending ||
+            otherInvestments.updateAssetMutation.isPending ||
+            otherInvestments.deleteMutation.isPending ||
+            otherInvestments.deleteAssetMutation.isPending
+          }
+          marketSubmitting={otherInvestments.syncMarketsMutation.isPending}
+          onCreate={async (payload) => {
+            await otherInvestments.createMutation.mutateAsync(payload);
+          }}
+          onUpdate={async (id, payload) => {
+            await otherInvestments.updateMutation.mutateAsync({ id, payload });
+          }}
+          onUpdateAsset={async (id, payload) => {
+            await otherInvestments.updateAssetMutation.mutateAsync({ id, payload });
+          }}
+          onDelete={async (id) => {
+            await otherInvestments.deleteMutation.mutateAsync(id);
+          }}
+          onDeleteAsset={async (id) => {
+            await otherInvestments.deleteAssetMutation.mutateAsync(id);
+          }}
+          onSyncMarkets={async (assets) => {
+            return otherInvestments.syncMarketsMutation.mutateAsync(assets);
           }}
         />
       )}

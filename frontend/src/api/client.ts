@@ -1,4 +1,18 @@
-import type { DashboardSummary, DividendRecord, SetupPayload, SetupStatus, StockPlan } from "../types";
+import type {
+  DashboardSummary,
+  DividendRecord,
+  MarketQuote,
+  MarketSyncResult,
+  OtherInvestmentMarketSyncResult,
+  OtherInvestmentAsset,
+  OtherInvestmentOverview,
+  OtherInvestmentPosition,
+  OtherInvestmentRecord,
+  SetupPayload,
+  SetupStatus,
+  StockPlan,
+  TradeRecord,
+} from "../types";
 
 type StockPayload = Omit<
   StockPlan,
@@ -9,6 +23,11 @@ type StockPayload = Omit<
   | "remainingTargetCapital"
   | "unrealizedProfitLoss"
   | "unrealizedProfitLossRate"
+  | "realizedProfitLoss"
+  | "dividendIncome"
+  | "totalProfitLoss"
+  | "isClosed"
+  | "hasTradeLedger"
   | "estimatedDividend"
   | "estimatedDividendYieldOnCost"
   | "estimatedDividendYieldOnMarket"
@@ -16,6 +35,14 @@ type StockPayload = Omit<
   | "estimatedDividendAtTargetYieldOnCapital"
   | "progress"
 >;
+
+type TradePayload = Omit<TradeRecord, "id">;
+type OtherInvestmentPayload = Omit<OtherInvestmentRecord, "id">;
+type OtherInvestmentAssetPayload = Pick<
+  OtherInvestmentAsset,
+  "assetCode" | "assetName" | "market" | "assetType" | "currentPrice" | "currency" | "notes"
+>;
+type OtherInvestmentSyncAsset = Pick<OtherInvestmentPosition, "assetCode" | "assetName" | "market" | "currency">;
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -47,6 +74,10 @@ export const api = {
     request("/api/stocks", { method: "POST", body: JSON.stringify(payload) }),
   updateStock: (id: string, payload: StockPayload) =>
     request(`/api/stocks/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  syncStockMarket: (id: string) =>
+    request<{ message: string; quote: MarketQuote }>(`/api/stocks/${id}/sync-market`, { method: "POST" }),
+  syncStocksMarket: (ids: string[]) =>
+    request<MarketSyncResult>("/api/stocks/sync-market", { method: "POST", body: JSON.stringify({ ids }) }),
   deleteStock: (id: string) => request(`/api/stocks/${id}`, { method: "DELETE" }),
   getDividends: () => request<DividendRecord[]>("/api/dividends"),
   createDividend: (payload: Omit<DividendRecord, "id">) =>
@@ -54,5 +85,25 @@ export const api = {
   updateDividend: (id: string, payload: Omit<DividendRecord, "id">) =>
     request(`/api/dividends/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteDividend: (id: string) => request(`/api/dividends/${id}`, { method: "DELETE" }),
+  getTrades: () => request<TradeRecord[]>("/api/trades"),
+  createTrade: (payload: TradePayload) =>
+    request("/api/trades", { method: "POST", body: JSON.stringify(payload) }),
+  updateTrade: (id: string, payload: TradePayload) =>
+    request(`/api/trades/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteTrade: (id: string) => request(`/api/trades/${id}`, { method: "DELETE" }),
+  getOtherInvestments: () => request<OtherInvestmentOverview>("/api/other-investments"),
+  createOtherInvestment: (payload: OtherInvestmentPayload) =>
+    request("/api/other-investments", { method: "POST", body: JSON.stringify(payload) }),
+  updateOtherInvestment: (id: string, payload: OtherInvestmentPayload) =>
+    request(`/api/other-investments/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  updateOtherInvestmentAsset: (id: string, payload: OtherInvestmentAssetPayload) =>
+    request(`/api/other-investments/assets/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  syncOtherInvestmentsMarket: (assets: OtherInvestmentSyncAsset[]) =>
+    request<OtherInvestmentMarketSyncResult>("/api/other-investments/sync-market", {
+      method: "POST",
+      body: JSON.stringify({ assets }),
+    }),
+  deleteOtherInvestmentAsset: (id: string) => request(`/api/other-investments/assets/${id}`, { method: "DELETE" }),
+  deleteOtherInvestment: (id: string) => request(`/api/other-investments/${id}`, { method: "DELETE" }),
   getDashboard: () => request<DashboardSummary>("/api/dashboard"),
 };

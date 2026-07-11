@@ -10,6 +10,7 @@ export const useDividends = (enabled = true) => {
   const invalidate = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["dividends"] }),
+      queryClient.invalidateQueries({ queryKey: ["stocks"] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
     ]);
 

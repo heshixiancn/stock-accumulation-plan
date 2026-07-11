@@ -29,6 +29,9 @@ setupRouter.post("/", async (req, res, next) => {
   const previousParentPageId = process.env.NOTION_PARENT_PAGE_ID;
   const previousStockDatabaseId = process.env.NOTION_STOCK_DATABASE_ID;
   const previousDividendDatabaseId = process.env.NOTION_DIVIDEND_DATABASE_ID;
+  const previousTradeDatabaseId = process.env.NOTION_TRADE_DATABASE_ID;
+  const previousOtherInvestmentAssetDatabaseId = process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID;
+  const previousOtherInvestmentDatabaseId = process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID;
 
   try {
     const payload = setupPayloadSchema.parse(req.body);
@@ -42,12 +45,18 @@ setupRouter.post("/", async (req, res, next) => {
     process.env.NOTION_PARENT_PAGE_ID = config.notionParentPageId;
     process.env.NOTION_STOCK_DATABASE_ID = "";
     process.env.NOTION_DIVIDEND_DATABASE_ID = "";
+    process.env.NOTION_TRADE_DATABASE_ID = "";
+    process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID = "";
+    process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = "";
 
     const databases = await ensureDatabases();
     saveNotionConfig({
       ...config,
       stockDatabaseId: databases.stockDbId,
       dividendDatabaseId: databases.dividendDbId,
+      tradeDatabaseId: databases.tradeDbId,
+      otherInvestmentAssetDatabaseId: databases.otherInvestmentAssetDbId,
+      otherInvestmentDatabaseId: databases.otherInvestmentDbId,
     });
 
     res.json({
@@ -77,6 +86,24 @@ setupRouter.post("/", async (req, res, next) => {
       delete process.env.NOTION_DIVIDEND_DATABASE_ID;
     } else {
       process.env.NOTION_DIVIDEND_DATABASE_ID = previousDividendDatabaseId;
+    }
+
+    if (previousTradeDatabaseId === undefined) {
+      delete process.env.NOTION_TRADE_DATABASE_ID;
+    } else {
+      process.env.NOTION_TRADE_DATABASE_ID = previousTradeDatabaseId;
+    }
+
+    if (previousOtherInvestmentAssetDatabaseId === undefined) {
+      delete process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID;
+    } else {
+      process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID = previousOtherInvestmentAssetDatabaseId;
+    }
+
+    if (previousOtherInvestmentDatabaseId === undefined) {
+      delete process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID;
+    } else {
+      process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = previousOtherInvestmentDatabaseId;
     }
 
     next(error);

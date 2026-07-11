@@ -1,0 +1,13 @@
+node_modules
+backend/dist
+frontend/dist
+dist
+build
+data
+.env
+.git
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo

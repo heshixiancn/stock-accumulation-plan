@@ -1,9 +1,12 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json ./
+COPY package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
-RUN npm install
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN npm config set registry "$NPM_REGISTRY" \
+  && npm ci --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 FROM deps AS build
 WORKDIR /app
@@ -21,4 +24,3 @@ COPY --from=build /app/package.json ./package.json
 COPY .env.example ./.env.example
 EXPOSE 3000
 CMD ["npm", "run", "start"]
-

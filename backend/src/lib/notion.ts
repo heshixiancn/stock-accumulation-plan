@@ -11,17 +11,29 @@ import type {
   UpdatePageParameters,
 } from "@notionhq/client/build/src/api-endpoints.js";
 import { clearNotionDatabaseConfig, requireNotionConfig, saveNotionConfig } from "../config/env.js";
-import { DIVIDEND_DATABASE_TITLE, STOCK_DATABASE_TITLE } from "../types/notion.js";
+import {
+  DIVIDEND_DATABASE_TITLE,
+  OTHER_INVESTMENT_ASSET_DATABASE_TITLE,
+  OTHER_INVESTMENT_DATABASE_TITLE,
+  STOCK_DATABASE_TITLE,
+  TRADE_DATABASE_TITLE,
+} from "../types/notion.js";
 import {
   dividendDatabaseProperties,
   isDatabaseTitleMatch,
+  otherInvestmentAssetDatabaseProperties,
+  otherInvestmentDatabaseProperties,
   stockDatabaseProperties,
+  tradeDatabaseProperties,
 } from "../utils/notion-helpers.js";
 import { HttpError } from "../utils/errors.js";
 
 export interface ManagedDatabases {
   stockDbId: string;
   dividendDbId: string;
+  tradeDbId: string;
+  otherInvestmentAssetDbId: string;
+  otherInvestmentDbId: string;
 }
 
 const getNotionClient = () => {
@@ -34,6 +46,48 @@ let cachedConfigKey = "";
 let ensureDatabasesPromise: Promise<ManagedDatabases> | null = null;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "Unknown Notion API error");
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getErrorCode = (error: unknown) => {
+  if (typeof error !== "object" || error === null) return "";
+  return String((error as { code?: unknown; cause?: { code?: unknown } }).code ?? (error as { cause?: { code?: unknown } }).cause?.code ?? "");
+};
+
+const getErrorStatus = (error: unknown) => {
+  if (typeof error !== "object" || error === null) return 0;
+  return Number((error as { status?: unknown; statusCode?: unknown }).status ?? (error as { statusCode?: unknown }).statusCode ?? 0);
+};
+
+const isRetryableNotionError = (error: unknown) => {
+  const code = getErrorCode(error);
+  const status = getErrorStatus(error);
+  const message = getErrorMessage(error);
+  return (
+    ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(code) ||
+    [408, 429, 500, 502, 503, 504].includes(status) ||
+    /ECONNRESET|ETIMEDOUT|socket|timeout|rate limited/i.test(message)
+  );
+};
+
+const withRetry = async <T>(operation: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> => {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isRetryableNotionError(error)) {
+        throw error;
+      }
+
+      await sleep(400 * 2 ** (attempt - 1));
+    }
+  }
+
+  throw new HttpError(502, `${label}失败，请稍后重试。`, getErrorMessage(lastError));
+};
 
 const withTimeout = async <T>(promise: Promise<T>, label: string, timeoutMs = 12000): Promise<T> => {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -51,8 +105,15 @@ const withTimeout = async <T>(promise: Promise<T>, label: string, timeoutMs = 12
 };
 
 const getConfigKey = () => {
-  const { parentPageId, stockDatabaseId, dividendDatabaseId } = requireNotionConfig();
-  return `${parentPageId}:${stockDatabaseId}:${dividendDatabaseId}`;
+  const {
+    parentPageId,
+    stockDatabaseId,
+    dividendDatabaseId,
+    tradeDatabaseId,
+    otherInvestmentAssetDatabaseId,
+    otherInvestmentDatabaseId,
+  } = requireNotionConfig();
+  return `${parentPageId}:${stockDatabaseId}:${dividendDatabaseId}:${tradeDatabaseId}:${otherInvestmentAssetDatabaseId}:${otherInvestmentDatabaseId}`;
 };
 
 const isChildDatabaseBlock = (
@@ -170,8 +231,14 @@ const createDatabase = async (
 };
 
 const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
-  const { stockDatabaseId, dividendDatabaseId } = requireNotionConfig();
-  if (stockDatabaseId || dividendDatabaseId) {
+  const {
+    stockDatabaseId,
+    dividendDatabaseId,
+    tradeDatabaseId,
+    otherInvestmentAssetDatabaseId,
+    otherInvestmentDatabaseId,
+  } = requireNotionConfig();
+  if (stockDatabaseId || dividendDatabaseId || tradeDatabaseId || otherInvestmentAssetDatabaseId || otherInvestmentDatabaseId) {
     cachedDatabases = null;
     cachedConfigKey = "";
     clearNotionDatabaseConfig();
@@ -192,19 +259,41 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
   const dividendExisting =
     childDatabases.find((database) => database.title === DIVIDEND_DATABASE_TITLE) ??
     (await searchParentDatabaseByTitle(DIVIDEND_DATABASE_TITLE));
+  const tradeExisting =
+    childDatabases.find((database) => database.title === TRADE_DATABASE_TITLE) ??
+    (await searchParentDatabaseByTitle(TRADE_DATABASE_TITLE));
+  const otherInvestmentAssetExisting =
+    childDatabases.find((database) => database.title === OTHER_INVESTMENT_ASSET_DATABASE_TITLE) ??
+    (await searchParentDatabaseByTitle(OTHER_INVESTMENT_ASSET_DATABASE_TITLE));
+  const otherInvestmentExisting =
+    childDatabases.find((database) => database.title === OTHER_INVESTMENT_DATABASE_TITLE) ??
+    (await searchParentDatabaseByTitle(OTHER_INVESTMENT_DATABASE_TITLE));
 
   const stockDbId = stockExisting?.id ?? (await createDatabase(STOCK_DATABASE_TITLE, stockDatabaseProperties));
   const dividendDbId =
     dividendExisting?.id ?? (await createDatabase(DIVIDEND_DATABASE_TITLE, dividendDatabaseProperties));
+  const tradeDbId = tradeExisting?.id ?? (await createDatabase(TRADE_DATABASE_TITLE, tradeDatabaseProperties));
+  const otherInvestmentAssetDbId =
+    otherInvestmentAssetExisting?.id ??
+    (await createDatabase(OTHER_INVESTMENT_ASSET_DATABASE_TITLE, otherInvestmentAssetDatabaseProperties));
+  const otherInvestmentDbId =
+    otherInvestmentExisting?.id ??
+    (await createDatabase(OTHER_INVESTMENT_DATABASE_TITLE, otherInvestmentDatabaseProperties));
 
   const databases = {
     stockDbId,
     dividendDbId,
+    tradeDbId,
+    otherInvestmentAssetDbId,
+    otherInvestmentDbId,
   };
 
   saveNotionConfig({
     stockDatabaseId: stockDbId,
     dividendDatabaseId: dividendDbId,
+    tradeDatabaseId: tradeDbId,
+    otherInvestmentAssetDatabaseId: otherInvestmentAssetDbId,
+    otherInvestmentDatabaseId: otherInvestmentDbId,
   });
 
   return databases;
@@ -231,29 +320,64 @@ export const ensureDatabases = async (): Promise<ManagedDatabases> => {
   return ensureDatabasesPromise;
 };
 
-export const queryDatabase = async (databaseId: string): Promise<QueryDatabaseResponse> =>
-  getNotionClient().databases.query({
-    database_id: databaseId,
-    page_size: 100,
-  });
+export const queryDatabase = async (databaseId: string): Promise<QueryDatabaseResponse> => {
+  const notion = getNotionClient();
+  const results: QueryDatabaseResponse["results"] = [];
+  let cursor: string | undefined;
+  let lastResponse: QueryDatabaseResponse | null = null;
+
+  do {
+    lastResponse = await withRetry(
+      () =>
+        notion.databases.query({
+          database_id: databaseId,
+          start_cursor: cursor,
+          page_size: 100,
+        }),
+      "查询 Notion 数据库",
+    );
+    results.push(...lastResponse.results);
+    cursor = lastResponse.next_cursor ?? undefined;
+  } while (cursor);
+
+  return {
+    ...lastResponse,
+    results,
+    has_more: false,
+    next_cursor: null,
+  };
+};
 
 export const createPage = async (databaseId: string, properties: Record<string, unknown>) =>
-  getNotionClient().pages.create({
-    parent: { database_id: databaseId },
-    properties: properties as CreatePageParameters["properties"],
-  });
+  withRetry(
+    () =>
+      getNotionClient().pages.create({
+        parent: { database_id: databaseId },
+        properties: properties as CreatePageParameters["properties"],
+      }),
+    "创建 Notion 页面",
+  );
 
 export const updatePage = async (pageId: string, properties: Record<string, unknown>) =>
-  getNotionClient().pages.update({
-    page_id: pageId,
-    properties: properties as UpdatePageParameters["properties"],
-  });
+  withRetry(
+    () =>
+      getNotionClient().pages.update({
+        page_id: pageId,
+        properties: properties as UpdatePageParameters["properties"],
+      }),
+    "更新 Notion 页面",
+    4,
+  );
 
 export const archivePage = async (pageId: string) =>
-  getNotionClient().pages.update({
-    page_id: pageId,
-    archived: true,
-  });
+  withRetry(
+    () =>
+      getNotionClient().pages.update({
+        page_id: pageId,
+        archived: true,
+      }),
+    "删除 Notion 页面",
+  );
 
 export const isPageObject = (result: QueryDatabaseResponse["results"][number]): result is PageObjectResponse =>
   result.object === "page";

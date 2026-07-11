@@ -1,4 +1,9 @@
 export type StockStatus = "观察中" | "建仓中" | "持有中" | "已暂停";
+export type TradeType = "买入" | "卖出";
+export type OtherInvestmentRecordType = TradeType | "分红";
+export type OtherInvestmentMarket = "A股" | "美股" | "港股";
+export type OtherInvestmentAssetType = "股票" | "基金" | "ETF" | "可转债" | "其他";
+export type OtherInvestmentCurrency = "CNY" | "USD" | "HKD";
 
 export interface StockPlan {
   id: string;
@@ -14,6 +19,11 @@ export interface StockPlan {
   remainingTargetCapital: number;
   unrealizedProfitLoss: number;
   unrealizedProfitLossRate: number;
+  realizedProfitLoss: number;
+  dividendIncome: number;
+  totalProfitLoss: number;
+  isClosed: boolean;
+  hasTradeLedger: boolean;
   dividendYield: number;
   dividendPerShare: number;
   estimatedDividend: number;
@@ -26,6 +36,32 @@ export interface StockPlan {
   notes: string;
   progress: number;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TradeRecord {
+  id: string;
+  title: string;
+  stockCode: string;
+  stockName: string;
+  tradeDate: string | null;
+  tradeType: TradeType;
+  price: number;
+  shares: number;
+  fee: number;
+  tax: number;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MarketQuote {
+  stockCode: string;
+  stockName?: string;
+  currentPrice: number;
+  previousClose?: number;
+  dividendYield: number;
+  provider: string;
   updatedAt?: string;
 }
 
@@ -46,7 +82,132 @@ export interface DividendRecord {
   updatedAt?: string;
 }
 
+export interface OtherInvestmentRecord {
+  id: string;
+  title: string;
+  assetCode: string;
+  assetName: string;
+  market: OtherInvestmentMarket;
+  assetType: OtherInvestmentAssetType;
+  tradeDate: string | null;
+  tradeType: OtherInvestmentRecordType;
+  price: number;
+  quantity: number;
+  fee: number;
+  tax: number;
+  currentPrice: number;
+  currency: OtherInvestmentCurrency;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OtherInvestmentAsset {
+  id: string;
+  assetCode: string;
+  assetName: string;
+  market: OtherInvestmentMarket;
+  assetType: OtherInvestmentAssetType;
+  currency: OtherInvestmentCurrency;
+  currentPrice: number;
+  holdingQuantity: number;
+  costBasis: number;
+  costPrice: number;
+  marketValue: number;
+  unrealizedProfitLoss: number;
+  unrealizedProfitLossRate: number;
+  realizedProfitLoss: number;
+  totalProfitLoss: number;
+  totalProfitLossRate: number;
+  isClosed: boolean;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OtherInvestmentPosition extends OtherInvestmentAsset {
+  tradeCount: number;
+  latestTradeDate: string | null;
+}
+
+export interface OtherInvestmentSummary {
+  totalMarketValue: number;
+  totalCostBasis: number;
+  totalUnrealizedProfitLoss: number;
+  totalRealizedProfitLoss: number;
+  totalProfitLoss: number;
+  positionCount: number;
+  openPositionCount: number;
+  closedPositionCount: number;
+  byMarket: Array<{
+    market: OtherInvestmentMarket;
+    marketValue: number;
+    totalProfitLoss: number;
+  }>;
+  byCurrency: Array<{
+    currency: OtherInvestmentCurrency;
+    marketValue: number;
+    costBasis: number;
+    unrealizedProfitLoss: number;
+    realizedProfitLoss: number;
+    totalProfitLoss: number;
+    positionCount: number;
+  }>;
+}
+
+export interface OtherInvestmentOverview {
+  records: OtherInvestmentRecord[];
+  positions: OtherInvestmentPosition[];
+  summary: OtherInvestmentSummary;
+}
+
 export interface DashboardSummary {
+  portfolioTotalCostBasis: number;
+  portfolioTotalMarketValue: number;
+  portfolioTotalUnrealizedProfitLoss: number;
+  portfolioTotalUnrealizedProfitLossRate: number;
+  portfolioTotalRealizedProfitLoss: number;
+  portfolioTotalProfitLoss: number;
+  portfolioTotalProfitLossRate: number;
+  portfolioOpenPositionCount: number;
+  portfolioClosedPositionCount: number;
+  portfolioByCurrency: Array<{
+    currency: OtherInvestmentCurrency;
+    marketValue: number;
+    costBasis: number;
+    unrealizedProfitLoss: number;
+    unrealizedProfitLossRate: number;
+    realizedProfitLoss: number;
+    totalProfitLoss: number;
+    totalProfitLossRate: number;
+    positionCount: number;
+    openPositionCount: number;
+    closedPositionCount: number;
+  }>;
+  moduleAllocation: Array<{
+    name: string;
+    currency: OtherInvestmentCurrency;
+    marketValue: number;
+    costBasis: number;
+    unrealizedProfitLoss: number;
+    realizedProfitLoss: number;
+    totalProfitLoss: number;
+    positionCount: number;
+  }>;
+  otherInvestmentMarketAllocation: Array<{
+    name: OtherInvestmentMarket;
+    currency: OtherInvestmentCurrency;
+    marketValue: number;
+    totalProfitLoss: number;
+    positionCount: number;
+  }>;
+  otherInvestmentTypeAllocation: Array<{
+    name: OtherInvestmentAssetType;
+    currency: OtherInvestmentCurrency;
+    marketValue: number;
+    totalProfitLoss: number;
+    positionCount: number;
+  }>;
   totalTargetShares: number;
   totalHoldingShares: number;
   totalHoldingCost: number;
@@ -55,6 +216,9 @@ export interface DashboardSummary {
   totalRemainingTargetCapital: number;
   totalUnrealizedProfitLoss: number;
   totalUnrealizedProfitLossRate: number;
+  totalRealizedProfitLoss: number;
+  totalProfitLoss: number;
+  totalProfitLossRate: number;
   estimatedAnnualDividend: number;
   estimatedAnnualDividendYieldOnCost: number;
   estimatedAnnualDividendYieldOnMarket: number;
@@ -75,6 +239,10 @@ export interface DashboardSummary {
     remainingTargetCapital: number;
     unrealizedProfitLoss: number;
     unrealizedProfitLossRate: number;
+    realizedProfitLoss: number;
+    dividendIncome: number;
+    totalProfitLoss: number;
+    isClosed: boolean;
     progress: number;
     estimatedDividend: number;
     estimatedDividendYieldOnCost: number;
@@ -92,5 +260,13 @@ export interface DashboardSummary {
     stockCode: string;
     stockName: string;
     amount: number;
+  }>;
+  profitLossByStock: Array<{
+    stockCode: string;
+    stockName: string;
+    unrealizedProfitLoss: number;
+    realizedProfitLoss: number;
+    dividendIncome: number;
+    totalProfitLoss: number;
   }>;
 }

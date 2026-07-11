@@ -1,6 +1,12 @@
 import { archivePage, createPage, ensureDatabases, isPageObject, queryDatabase, updatePage } from "../lib/notion.js";
+import { listDividends } from "./dividend-service.js";
+import { fetchStockMarketQuote } from "./market-data-service.js";
 import { mapStockPage } from "./notion-mappers.js";
+import { applyPortfolioToStocks } from "./portfolio-service.js";
+import { listTrades } from "./trade-service.js";
+import type { MarketQuote, StockPlan } from "../types/domain.js";
 import { normalizeStockPayload, type StockPayload } from "./validation.js";
+import { HttpError } from "../utils/errors.js";
 import {
   numberProperty,
   richText,
@@ -8,10 +14,15 @@ import {
   title,
 } from "../utils/notion-helpers.js";
 
-export const listStocks = async () => {
+export const listStockPlans = async () => {
   const { stockDbId } = await ensureDatabases();
   const response = await queryDatabase(stockDbId);
   return response.results.filter(isPageObject).map(mapStockPage);
+};
+
+export const listStocks = async () => {
+  const [stocks, trades, dividends] = await Promise.all([listStockPlans(), listTrades(), listDividends()]);
+  return applyPortfolioToStocks(stocks, trades, dividends);
 };
 
 export const createStock = async (payload: StockPayload) => {
@@ -59,3 +70,74 @@ export const deleteStockById = async (id: string) => {
   await archivePage(id);
 };
 
+const syncStockMarketData = async (stock: StockPlan) => {
+  const quote = await fetchStockMarketQuote(stock);
+  await updateStockById(stock.id, {
+    stockCode: stock.stockCode,
+    stockName: quote.stockName || stock.stockName || stock.stockCode,
+    currentPrice: quote.currentPrice,
+    costPrice: stock.costPrice,
+    targetShares: stock.targetShares,
+    holdingShares: stock.holdingShares,
+    dividendYield: quote.dividendYield,
+    dividendPerShare: stock.dividendPerShare,
+    actualDividend: stock.actualDividend,
+    status: stock.status,
+    notes: stock.notes,
+  });
+
+  return quote;
+};
+
+export const syncStockMarketDataById = async (id: string) => {
+  const stocks = await listStockPlans();
+  const stock = stocks.find((item) => item.id === id);
+
+  if (!stock) {
+    throw new HttpError(404, "未找到股票计划。");
+  }
+
+  return syncStockMarketData(stock);
+};
+
+export const syncStocksMarketData = async (ids?: string[]) => {
+  const stocks = await listStockPlans();
+  const idSet = ids && ids.length > 0 ? new Set(ids) : null;
+  const targets = idSet ? stocks.filter((item) => idSet.has(item.id)) : stocks;
+  const results: Array<{
+    id: string;
+    stockCode: string;
+    stockName: string;
+    ok: boolean;
+    message?: string;
+    quote?: MarketQuote;
+  }> = [];
+
+  for (const stock of targets) {
+    try {
+      const quote = await syncStockMarketData(stock);
+      results.push({
+        id: stock.id,
+        stockCode: stock.stockCode,
+        stockName: stock.stockName,
+        ok: true,
+        quote,
+      });
+    } catch (error) {
+      results.push({
+        id: stock.id,
+        stockCode: stock.stockCode,
+        stockName: stock.stockName,
+        ok: false,
+        message: error instanceof Error ? error.message : "同步失败",
+      });
+    }
+  }
+
+  return {
+    total: targets.length,
+    successCount: results.filter((item) => item.ok).length,
+    failedCount: results.filter((item) => !item.ok).length,
+    results,
+  };
+};

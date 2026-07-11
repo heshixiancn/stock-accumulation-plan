@@ -11,6 +11,11 @@ type StockPayload = Omit<
   | "remainingTargetCapital"
   | "unrealizedProfitLoss"
   | "unrealizedProfitLossRate"
+  | "realizedProfitLoss"
+  | "dividendIncome"
+  | "totalProfitLoss"
+  | "isClosed"
+  | "hasTradeLedger"
   | "estimatedDividend"
   | "estimatedDividendYieldOnCost"
   | "estimatedDividendYieldOnMarket"
@@ -40,6 +45,14 @@ export const useStocks = (enabled = true) => {
     }),
     updateMutation: useMutation({
       mutationFn: ({ id, payload }: { id: string; payload: StockPayload }) => api.updateStock(id, payload),
+      onSuccess: invalidate,
+    }),
+    syncMarketMutation: useMutation({
+      mutationFn: (id: string) => api.syncStockMarket(id),
+      onSuccess: invalidate,
+    }),
+    syncMarketsMutation: useMutation({
+      mutationFn: (ids: string[]) => api.syncStocksMarket(ids),
       onSuccess: invalidate,
     }),
     deleteMutation: useMutation({

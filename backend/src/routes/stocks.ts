@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { createStock, deleteStockById, listStocks, updateStockById } from "../services/stock-service.js";
+import {
+  createStock,
+  deleteStockById,
+  listStocks,
+  syncStockMarketDataById,
+  syncStocksMarketData,
+  updateStockById,
+} from "../services/stock-service.js";
 import { stockPayloadSchema } from "../services/validation.js";
 
 export const stocksRouter = Router();
@@ -33,6 +40,27 @@ stocksRouter.put("/:id", async (req, res, next) => {
   }
 });
 
+stocksRouter.post("/sync-market", async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((item: unknown): item is string => typeof item === "string")
+      : undefined;
+    const result = await syncStocksMarketData(ids);
+    res.json({ message: "synced", ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+stocksRouter.post("/:id/sync-market", async (req, res, next) => {
+  try {
+    const quote = await syncStockMarketDataById(req.params.id);
+    res.json({ message: "synced", quote });
+  } catch (error) {
+    next(error);
+  }
+});
+
 stocksRouter.delete("/:id", async (req, res, next) => {
   try {
     await deleteStockById(req.params.id);
@@ -41,4 +69,3 @@ stocksRouter.delete("/:id", async (req, res, next) => {
     next(error);
   }
 });
-
