@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { History, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
+import { ExternalLink, History, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
 import { LedgerEntryDialog } from "../components/forms/ledger-entry-dialog";
 import { StockFormDialog } from "../components/forms/stock-form-dialog";
 import { Button } from "../components/ui/button";
@@ -21,6 +21,9 @@ import {
 import type { DividendRecord, MarketSyncResult, StockPlan, StockStatus, TradeRecord } from "../types";
 
 const statusFilters = ["全部", "观察中", "建仓中", "持有中", "已暂停"] as const;
+
+const getTonghuashunStockUrl = (stockCode: string) =>
+  `https://stockpage.10jqka.com.cn/${encodeURIComponent(stockCode.trim())}/`;
 
 const getStatusBadge = (stock: StockPlan) => {
   if (stock.isClosed) {
@@ -256,9 +259,26 @@ export const StocksPage = ({
                     className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_1.1fr_0.85fr_0.9fr_1.05fr_1.05fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-semibold">{item.stockName}</div>
+                      <a
+                        className="group inline-flex max-w-full items-center gap-1 truncate font-semibold transition-colors hover:text-primary"
+                        href={getTonghuashunStockUrl(item.stockCode)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`打开同花顺行情：${item.stockName}（${item.stockCode}）`}
+                      >
+                        <span className="truncate">{item.stockName}</span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
+                      </a>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <span>{item.stockCode}</span>
+                        <a
+                          className="transition-colors hover:text-primary hover:underline"
+                          href={getTonghuashunStockUrl(item.stockCode)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`打开同花顺行情：${item.stockName}（${item.stockCode}）`}
+                        >
+                          {item.stockCode}
+                        </a>
                         {item.hasTradeLedger ? <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">流水核算</span> : null}
                       </div>
                     </div>
