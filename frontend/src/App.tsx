@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
 import { AppShell } from "./components/layout/app-shell";
-import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { Tabs } from "./components/ui/tabs";
 import { api } from "./api/client";
@@ -15,6 +13,7 @@ import "./index.css";
 import { DashboardPage } from "./pages/dashboard-page";
 import { OtherInvestmentsPage } from "./pages/other-investments-page";
 import { SetupPage } from "./pages/setup-page";
+import { SettingsPage } from "./pages/settings-page";
 import { StocksPage } from "./pages/stocks-page";
 
 const queryClient = new QueryClient();
@@ -60,7 +59,7 @@ const ConfiguredApp = () => {
 
   return (
     <>
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6">
         <Tabs
           value={tab}
           onChange={setTab}
@@ -68,17 +67,9 @@ const ConfiguredApp = () => {
             { label: "总览", value: "dashboard" },
             { label: "攒股计划", value: "stocks" },
             { label: "其他投资", value: "other-investments" },
+            { label: "设置", value: "settings" },
           ]}
         />
-        <Button
-          className="hidden lg:inline-flex"
-          variant="secondary"
-          disabled={isInitializing}
-          onClick={() => void initializeDatabases(true)}
-        >
-          {isInitializing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          {isInitializing ? "初始化中..." : "重新初始化 Notion 数据库"}
-        </Button>
       </div>
 
       {tab === "dashboard" && dashboard.data && <DashboardPage data={dashboard.data} />}
@@ -156,6 +147,13 @@ const ConfiguredApp = () => {
           onSyncMarkets={async (assets) => {
             return otherInvestments.syncMarketsMutation.mutateAsync(assets);
           }}
+        />
+      )}
+      {tab === "settings" && (
+        <SettingsPage
+          initMessage={initMessage}
+          isInitializing={isInitializing}
+          onInitialize={() => void initializeDatabases(true)}
         />
       )}
     </>
