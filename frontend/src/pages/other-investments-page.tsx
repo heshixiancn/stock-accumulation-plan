@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { History, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
+import { ExternalLink, History, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -23,6 +23,19 @@ const marketOptions: OtherInvestmentMarket[] = ["A股", "美股", "港股"];
 const assetTypeOptions: OtherInvestmentAssetType[] = ["股票", "基金", "ETF", "可转债", "其他"];
 const currencyOptions: OtherInvestmentCurrency[] = ["CNY", "USD", "HKD"];
 const tradeTypeOptions: OtherInvestmentRecordType[] = ["买入", "卖出", "分红"];
+
+const US_TRADING_VIEW_EXCHANGE_BY_SYMBOL: Record<string, string> = {
+  AAPL: "NASDAQ",
+  DGP: "AMEX",
+  GLD: "AMEX",
+  MSFT: "NASDAQ",
+  NVDA: "NASDAQ",
+  QQQ: "NASDAQ",
+  SLV: "AMEX",
+  SPY: "AMEX",
+  TSLA: "NASDAQ",
+  TSLQ: "NASDAQ",
+};
 
 type OtherInvestmentPayload = Omit<OtherInvestmentRecord, "id">;
 type OtherInvestmentFormValues = OtherInvestmentPayload & { tradeDate: string };
@@ -53,6 +66,38 @@ const emptyValues: OtherInvestmentFormValues = {
   currentPrice: 0,
   currency: "CNY",
   notes: "",
+};
+
+const getTonghuashunStockUrl = (assetCode: string) =>
+  `https://stockpage.10jqka.com.cn/${encodeURIComponent(assetCode.trim())}/`;
+
+const getTradingViewUrl = (position: Pick<OtherInvestmentPosition, "assetCode" | "assetName" | "market">) => {
+  const code = position.assetCode.trim();
+  if (!code) {
+    return `https://www.tradingview.com/search/?query=${encodeURIComponent(position.assetName)}`;
+  }
+
+  if (position.market === "港股") {
+    const hkCode = code.replace(/\.HK$/i, "").replace(/^0+/, "") || code;
+    return `https://www.tradingview.com/symbols/HKEX-${encodeURIComponent(hkCode)}/`;
+  }
+
+  const symbol = code.replace(/\.US$/i, "").toUpperCase();
+  const symbolPath = symbol.includes(":")
+    ? symbol.replace(":", "-")
+    : symbol.includes("-")
+      ? symbol
+      : `${US_TRADING_VIEW_EXCHANGE_BY_SYMBOL[symbol] ?? "NASDAQ"}-${symbol}`;
+
+  return `https://www.tradingview.com/symbols/${encodeURIComponent(symbolPath)}/`;
+};
+
+const getMarketQuoteUrl = (position: Pick<OtherInvestmentPosition, "assetCode" | "assetName" | "market">) => {
+  if (position.market === "A股" && position.assetCode.trim()) {
+    return getTonghuashunStockUrl(position.assetCode);
+  }
+
+  return getTradingViewUrl(position);
 };
 
 const formatMoney = (value: number, currency = "CNY") =>
@@ -652,6 +697,7 @@ export const OtherInvestmentsPage = ({
             <div className="divide-y divide-border/60">
               {filteredPositions.map((item) => {
                 const positionRecords = recordsByAssetKey.get(positionAssetKey(item)) ?? [];
+                const quoteUrl = getMarketQuoteUrl(item);
 
                 return (
                   <div
@@ -659,9 +705,30 @@ export const OtherInvestmentsPage = ({
                     className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_0.8fr_0.85fr_0.95fr_1.05fr_1.1fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-semibold">{item.assetName}</div>
+                      <a
+                        className="group inline-flex max-w-full items-center gap-1 truncate font-semibold transition-colors hover:text-primary"
+                        href={quoteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`打开行情：${item.assetName}${item.assetCode ? `（${item.assetCode}）` : ""}`}
+                      >
+                        <span className="truncate">{item.assetName}</span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
+                      </a>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <span>{item.assetCode || "-"}</span>
+                        {item.assetCode ? (
+                          <a
+                            className="transition-colors hover:text-primary hover:underline"
+                            href={quoteUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`打开行情：${item.assetName}（${item.assetCode}）`}
+                          >
+                            {item.assetCode}
+                          </a>
+                        ) : (
+                          <span>-</span>
+                        )}
                         <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{item.currency}</span>
                         <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{positionRecords.length} 笔流水</span>
                       </div>
