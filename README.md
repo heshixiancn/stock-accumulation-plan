@@ -262,12 +262,6 @@ MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 docker-compose up -d --build
 ```
 
-如果要同时启动项目内置 MySQL：
-
-```bash
-DATA_SOURCE=mysql docker-compose --profile mysql up -d --build
-```
-
 3. 访问：
 
 ```text

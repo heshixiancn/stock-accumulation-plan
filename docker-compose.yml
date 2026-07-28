@@ -15,11 +15,6 @@ services:
       DATA_SOURCE: ${DATA_SOURCE:-notion}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:6080}
       APP_CONFIG_FILE: /app/data/.env
-      MYSQL_HOST: ${MYSQL_HOST:-10.126.126.10}
-      MYSQL_PORT: ${MYSQL_PORT:-3306}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_accumulation_plan}
-      MYSQL_USER: ${MYSQL_USER:-stock_accumulation_plan_app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
       DAILY_EMAIL_REPORT_ENABLED: ${DAILY_EMAIL_REPORT_ENABLED:-false}
       DAILY_EMAIL_REPORT_TIME: ${DAILY_EMAIL_REPORT_TIME:-18:00}
       DAILY_EMAIL_REPORT_TIMEZONE: ${DAILY_EMAIL_REPORT_TIMEZONE:-Asia/Shanghai}
@@ -34,21 +29,3 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-
-  mysql:
-    image: mysql:8.4
-    profiles:
-      - mysql
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_accumulation_plan}
-      MYSQL_USER: ${MYSQL_USER:-stock_accumulation_plan_app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-CHANGE_ME_ROOT_PASSWORD}
-    ports:
-      - "${MYSQL_HOST_PORT:-3306}:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    restart: unless-stopped
-
-volumes:
-  mysql-data:
