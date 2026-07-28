@@ -7,6 +7,13 @@ import { listTrades } from "./trade-service.js";
 import type { MarketQuote, StockPlan } from "../types/domain.js";
 import { normalizeStockPayload, type StockPayload } from "./validation.js";
 import { HttpError } from "../utils/errors.js";
+import { getDataSource } from "./data-source.js";
+import {
+  createMysqlStock,
+  deleteMysqlStockById,
+  listMysqlStockPlans,
+  updateMysqlStockById,
+} from "./mysql-basic-service.js";
 import {
   numberProperty,
   richText,
@@ -14,7 +21,13 @@ import {
   title,
 } from "../utils/notion-helpers.js";
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const listStockPlans = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlStockPlans();
+  }
+
   const { stockDbId } = await ensureDatabases();
   const response = await queryDatabase(stockDbId);
   return response.results.filter(isPageObject).map(mapStockPage);
@@ -26,6 +39,11 @@ export const listStocks = async () => {
 };
 
 export const createStock = async (payload: StockPayload) => {
+  if (getDataSource() === "mysql") {
+    await createMysqlStock(payload);
+    return;
+  }
+
   const { stockDbId } = await ensureDatabases();
   const data = normalizeStockPayload(payload);
 
@@ -47,6 +65,11 @@ export const createStock = async (payload: StockPayload) => {
 };
 
 export const updateStockById = async (id: string, payload: StockPayload) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlStockById(id, payload);
+    return;
+  }
+
   const data = normalizeStockPayload(payload);
 
   await updatePage(id, {
@@ -67,6 +90,11 @@ export const updateStockById = async (id: string, payload: StockPayload) => {
 };
 
 export const deleteStockById = async (id: string) => {
+  if (getDataSource() === "mysql") {
+    await deleteMysqlStockById(id);
+    return;
+  }
+
   await archivePage(id);
 };
 
@@ -113,7 +141,11 @@ export const syncStocksMarketData = async (ids?: string[]) => {
     quote?: MarketQuote;
   }> = [];
 
-  for (const stock of targets) {
+  for (const [index, stock] of targets.entries()) {
+    if (index > 0) {
+      await sleep(200);
+    }
+
     try {
       const quote = await syncStockMarketData(stock);
       results.push({

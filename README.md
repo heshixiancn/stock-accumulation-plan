@@ -133,9 +133,10 @@ NOTION_PARENT_PAGE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 cp .env.example .env
 ```
 
-2. 填写你的 Notion 配置：
+2. 填写你的数据源配置。默认使用 Notion：
 
 ```env
+DATA_SOURCE=notion
 NOTION_TOKEN=
 NOTION_PARENT_PAGE_ID=
 NOTION_STOCK_DATABASE_ID=
@@ -150,6 +151,46 @@ AUTO_MARKET_SYNC_TIME=16:10
 AUTO_MARKET_SYNC_TIMEZONE=Asia/Shanghai
 AUTO_MARKET_SYNC_STATE_FILE=
 ```
+
+如果要使用 MySQL：
+
+```env
+DATA_SOURCE=mysql
+MYSQL_HOST=10.126.126.10
+MYSQL_PORT=3306
+MYSQL_DATABASE=stock_accumulation_plan
+MYSQL_USER=stock_accumulation_plan_app
+MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+```
+
+MySQL 模式下，`POST /api/init` 会自动创建所需表结构；前端和 REST API 不需要改。
+建库、应用用户授权、备份和恢复脚本见 `docs/mysql-operations.md`。
+
+数据迁移和 JSON 备份：
+
+```bash
+npm --workspace backend run data:migrate:notion-to-mysql
+npm --workspace backend run data:migrate:mysql-to-notion
+EXPORT_SOURCE=mysql npm --workspace backend run data:export
+IMPORT_TARGET=mysql IMPORT_FILE=backups/data-mysql-xxx.json npm --workspace backend run data:import
+```
+
+每日邮件报告可选配置：
+
+```env
+DAILY_EMAIL_REPORT_ENABLED=true
+DAILY_EMAIL_REPORT_TIME=18:00
+DAILY_EMAIL_REPORT_TIMEZONE=Asia/Shanghai
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-account@example.com
+SMTP_PASSWORD=your-smtp-password
+EMAIL_FROM=your-account@example.com
+EMAIL_TO=receiver@example.com
+```
+
+`SMTP_PORT=465` 时通常设置 `SMTP_SECURE=true`；`SMTP_PORT=587` 时通常设置 `SMTP_SECURE=false`，应用会使用 STARTTLS。
 
 3. 安装依赖：
 
@@ -192,6 +233,7 @@ http://localhost:6080
 Docker 部署建议使用：
 
 ```env
+DATA_SOURCE=notion
 NOTION_TOKEN=
 NOTION_PARENT_PAGE_ID=
 NOTION_STOCK_DATABASE_ID=
@@ -207,12 +249,23 @@ AUTO_MARKET_SYNC_ENABLED=true
 AUTO_MARKET_SYNC_TIME=16:10
 AUTO_MARKET_SYNC_TIMEZONE=Asia/Shanghai
 AUTO_MARKET_SYNC_STATE_FILE=
+MYSQL_HOST=10.126.126.10
+MYSQL_PORT=3306
+MYSQL_DATABASE=stock_accumulation_plan
+MYSQL_USER=stock_accumulation_plan_app
+MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 ```
 
 2. 执行：
 
 ```bash
 docker-compose up -d --build
+```
+
+如果要同时启动项目内置 MySQL：
+
+```bash
+DATA_SOURCE=mysql docker-compose --profile mysql up -d --build
 ```
 
 3. 访问：

@@ -7,14 +7,30 @@ import {
   richText,
   title,
 } from "../utils/notion-helpers.js";
+import { getDataSource } from "./data-source.js";
+import {
+  createMysqlDividend,
+  deleteMysqlDividendById,
+  listMysqlDividends,
+  updateMysqlDividendById,
+} from "./mysql-basic-service.js";
 
 export const listDividends = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlDividends();
+  }
+
   const { dividendDbId } = await ensureDatabases();
   const response = await queryDatabase(dividendDbId);
   return response.results.filter(isPageObject).map(mapDividendPage);
 };
 
 export const createDividend = async (payload: DividendPayload) => {
+  if (getDataSource() === "mysql") {
+    await createMysqlDividend(payload);
+    return;
+  }
+
   const { dividendDbId } = await ensureDatabases();
   const data = normalizeDividendPayload(payload);
 
@@ -34,6 +50,11 @@ export const createDividend = async (payload: DividendPayload) => {
 };
 
 export const updateDividendById = async (id: string, payload: DividendPayload) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlDividendById(id, payload);
+    return;
+  }
+
   const data = normalizeDividendPayload(payload);
 
   await updatePage(id, {
@@ -52,6 +73,10 @@ export const updateDividendById = async (id: string, payload: DividendPayload) =
 };
 
 export const deleteDividendById = async (id: string) => {
+  if (getDataSource() === "mysql") {
+    await deleteMysqlDividendById(id);
+    return;
+  }
+
   await archivePage(id);
 };
-

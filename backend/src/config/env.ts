@@ -31,6 +31,7 @@ const booleanEnv = z
   .transform((value) => !["0", "false", "no", "off"].includes(value.trim().toLowerCase()));
 
 const envSchema = z.object({
+  DATA_SOURCE: z.enum(["notion", "mysql"]).default("notion"),
   NOTION_TOKEN: z.string().optional().default(""),
   NOTION_PARENT_PAGE_ID: z.string().optional().default(""),
   NOTION_STOCK_DATABASE_ID: z.string().optional().default(""),
@@ -45,6 +46,22 @@ const envSchema = z.object({
   AUTO_MARKET_SYNC_TIME: z.string().regex(/^\d{2}:\d{2}$/).default("16:10"),
   AUTO_MARKET_SYNC_TIMEZONE: z.string().default("Asia/Shanghai"),
   AUTO_MARKET_SYNC_STATE_FILE: z.string().optional().default(""),
+  MYSQL_HOST: z.string().default("127.0.0.1"),
+  MYSQL_PORT: z.coerce.number().int().positive().default(3306),
+  MYSQL_DATABASE: z.string().default("stock_accumulator"),
+  MYSQL_USER: z.string().default("root"),
+  MYSQL_PASSWORD: z.string().optional().default(""),
+  DAILY_EMAIL_REPORT_ENABLED: booleanEnv.default("false"),
+  DAILY_EMAIL_REPORT_TIME: z.string().regex(/^\d{2}:\d{2}$/).default("18:00"),
+  DAILY_EMAIL_REPORT_TIMEZONE: z.string().default("Asia/Shanghai"),
+  DAILY_EMAIL_REPORT_STATE_FILE: z.string().optional().default(""),
+  SMTP_HOST: z.string().optional().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: booleanEnv.default("false"),
+  SMTP_USER: z.string().optional().default(""),
+  SMTP_PASSWORD: z.string().optional().default(""),
+  EMAIL_FROM: z.string().optional().default(""),
+  EMAIL_TO: z.string().optional().default(""),
 });
 
 export type RuntimeEnv = z.infer<typeof envSchema>;
@@ -53,6 +70,20 @@ export const getEnv = (): RuntimeEnv => envSchema.parse(process.env);
 
 export const getSetupStatus = () => {
   const env = getEnv();
+  if (env.DATA_SOURCE === "mysql") {
+    return {
+      configured: Boolean(env.MYSQL_HOST && env.MYSQL_DATABASE && env.MYSQL_USER),
+      missing: [
+        ["MYSQL_HOST", env.MYSQL_HOST],
+        ["MYSQL_DATABASE", env.MYSQL_DATABASE],
+        ["MYSQL_USER", env.MYSQL_USER],
+      ]
+        .filter(([, value]) => !value)
+        .map(([key]) => key),
+      envFilePath,
+    };
+  }
+
   const missing = [
     ["NOTION_TOKEN", env.NOTION_TOKEN],
     ["NOTION_PARENT_PAGE_ID", env.NOTION_PARENT_PAGE_ID],
@@ -163,6 +194,56 @@ export const saveNotionConfig = (config: {
   if (updates.NOTION_OTHER_INVESTMENT_DATABASE_ID !== undefined) {
     process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = updates.NOTION_OTHER_INVESTMENT_DATABASE_ID;
   }
+};
+
+export const saveEmailReportConfig = (config: {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword?: string;
+  emailFrom: string;
+  emailTo: string;
+}) => {
+  const updates = {
+    DAILY_EMAIL_REPORT_ENABLED: String(config.enabled),
+    DAILY_EMAIL_REPORT_TIME: stringifyEnvValue(config.time),
+    DAILY_EMAIL_REPORT_TIMEZONE: stringifyEnvValue(config.timezone),
+    SMTP_HOST: stringifyEnvValue(config.smtpHost),
+    SMTP_PORT: String(config.smtpPort),
+    SMTP_SECURE: String(config.smtpSecure),
+    SMTP_USER: stringifyEnvValue(config.smtpUser),
+    ...(config.smtpPassword !== undefined ? { SMTP_PASSWORD: stringifyEnvValue(config.smtpPassword) } : {}),
+    EMAIL_FROM: stringifyEnvValue(config.emailFrom),
+    EMAIL_TO: stringifyEnvValue(config.emailTo),
+  };
+
+  const existing = fs.existsSync(envFilePath) ? fs.readFileSync(envFilePath, "utf8").split(/\r?\n/) : [];
+  const seen = new Set<string>();
+  const nextLines = existing.map((line) => {
+    const match = line.match(/^([A-Z0-9_]+)=/);
+    if (!match) return line;
+
+    const key = match[1] as keyof typeof updates;
+    if (!(key in updates)) return line;
+
+    seen.add(key);
+    return `${key}=${updates[key]}`;
+  });
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (!seen.has(key)) {
+      nextLines.push(`${key}=${value}`);
+    }
+    process.env[key] = value;
+  }
+
+  const directory = path.dirname(envFilePath);
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(envFilePath, `${nextLines.filter(Boolean).join("\n")}\n`);
 };
 
 export const clearNotionDatabaseConfig = () => {

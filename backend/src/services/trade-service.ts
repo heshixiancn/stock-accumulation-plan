@@ -2,8 +2,19 @@ import { archivePage, createPage, ensureDatabases, isPageObject, queryDatabase, 
 import { mapTradePage } from "./notion-mappers.js";
 import { normalizeTradePayload, type TradePayload } from "./validation.js";
 import { dateProperty, numberProperty, richText, selectProperty, title } from "../utils/notion-helpers.js";
+import { getDataSource } from "./data-source.js";
+import {
+  createMysqlTrade,
+  deleteMysqlTradeById,
+  listMysqlTrades,
+  updateMysqlTradeById,
+} from "./mysql-basic-service.js";
 
 export const listTrades = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlTrades();
+  }
+
   const { tradeDbId } = await ensureDatabases();
   const response = await queryDatabase(tradeDbId);
   return response.results
@@ -16,6 +27,11 @@ export const listTrades = async () => {
 };
 
 export const createTrade = async (payload: TradePayload) => {
+  if (getDataSource() === "mysql") {
+    await createMysqlTrade(payload);
+    return;
+  }
+
   const { tradeDbId } = await ensureDatabases();
   const data = normalizeTradePayload(payload);
 
@@ -34,6 +50,11 @@ export const createTrade = async (payload: TradePayload) => {
 };
 
 export const updateTradeById = async (id: string, payload: TradePayload) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlTradeById(id, payload);
+    return;
+  }
+
   const data = normalizeTradePayload(payload);
 
   await updatePage(id, {
@@ -51,5 +72,10 @@ export const updateTradeById = async (id: string, payload: TradePayload) => {
 };
 
 export const deleteTradeById = async (id: string) => {
+  if (getDataSource() === "mysql") {
+    await deleteMysqlTradeById(id);
+    return;
+  }
+
   await archivePage(id);
 };

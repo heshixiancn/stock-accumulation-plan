@@ -21,6 +21,7 @@ COPY --from=build /app/backend/dist ./backend/dist
 COPY --from=build /app/frontend/dist ./frontend/dist
 COPY --from=build /app/backend/package.json ./backend/package.json
 COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/ops ./ops
 COPY .env.example ./.env.example
 EXPOSE 3000
 CMD ["npm", "run", "start"]

@@ -309,3 +309,29 @@ export interface SetupPayload {
   notionToken: string;
   notionParentPageId: string;
 }
+
+export interface EmailReportConfig {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPasswordConfigured: boolean;
+  emailFrom: string;
+  emailTo: string;
+}
+
+export interface EmailReportConfigPayload {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword?: string;
+  emailFrom: string;
+  emailTo: string;
+}

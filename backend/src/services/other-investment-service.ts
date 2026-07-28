@@ -19,9 +19,21 @@ import {
   type OtherInvestmentAssetPayload,
   type OtherInvestmentPayload,
 } from "./validation.js";
+import { getDataSource } from "./data-source.js";
+import {
+  createMysqlOtherInvestmentAsset,
+  createMysqlOtherInvestmentRecord as createMysqlOtherInvestmentRecordPage,
+  deleteMysqlOtherInvestmentAsset,
+  deleteMysqlOtherInvestmentRecord,
+  listMysqlOtherInvestmentAssets,
+  listMysqlOtherInvestmentRecords,
+  updateMysqlOtherInvestmentAsset,
+  updateMysqlOtherInvestmentRecord,
+} from "./mysql-other-investment-service.js";
 
 const roundMoney = (value: number) => roundTo(value, 4);
 const roundQuantity = (market: OtherInvestmentMarket, value: number) => (market === "美股" ? roundTo(value, 4) : Math.round(value || 0));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const assetKey = (record: Pick<OtherInvestmentRecord | OtherInvestmentAsset, "market" | "assetCode" | "assetName">) =>
   `${record.market}:${record.assetCode || record.assetName}`.trim();
@@ -279,12 +291,20 @@ const recordPayload = (record: OtherInvestmentRecord, updates: Partial<OtherInve
 });
 
 const listOtherInvestmentAssets = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlOtherInvestmentAssets();
+  }
+
   const { otherInvestmentAssetDbId } = await ensureDatabases();
   const response = await queryDatabase(otherInvestmentAssetDbId);
   return response.results.filter(isPageObject).map(mapOtherInvestmentAssetPage);
 };
 
 export const listOtherInvestmentRecords = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlOtherInvestmentRecords();
+  }
+
   const { otherInvestmentDbId } = await ensureDatabases();
   const response = await queryDatabase(otherInvestmentDbId);
   return response.results
@@ -296,7 +316,11 @@ export const listOtherInvestmentRecords = async () => {
     });
 };
 
-const createAssetPage = async (payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+export const createOtherInvestmentAsset = async (payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+  if (getDataSource() === "mysql") {
+    return createMysqlOtherInvestmentAsset(payload);
+  }
+
   const { otherInvestmentAssetDbId } = await ensureDatabases();
   const response = await createPage(otherInvestmentAssetDbId, assetProperties(payload, summary));
   if (!("properties" in response)) {
@@ -306,10 +330,20 @@ const createAssetPage = async (payload: OtherInvestmentAssetPayload, summary?: O
 };
 
 const updateAssetPage = async (id: string, payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlOtherInvestmentAsset(id, payload);
+    return;
+  }
+
   await updatePage(id, assetProperties(payload, summary));
 };
 
 const updateRecordPage = async (id: string, payload: OtherInvestmentPayload) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlOtherInvestmentRecord(id, payload);
+    return;
+  }
+
   await updatePage(id, recordProperties(payload));
 };
 
@@ -344,7 +378,7 @@ const ensureAssetPagesForRecords = async (records: OtherInvestmentRecord[], asse
       notes: "",
     };
     const position = buildPosition(virtualAsset, assetRecords);
-    const created = await createAssetPage(assetPayloadFromPosition(position), position);
+    const created = await createOtherInvestmentAsset(assetPayloadFromPosition(position), position);
     nextAssets.push(created);
     existingKeys.add(key);
   }
@@ -395,13 +429,19 @@ const findOrCreateAssetForPayload = async (payload: OtherInvestmentPayload) => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } satisfies OtherInvestmentRecord;
-  const created = await createAssetPage(assetPayloadFromRecord(recordLike));
+  const created = await createOtherInvestmentAsset(assetPayloadFromRecord(recordLike));
   return { asset: created, records };
 };
 
 export const createOtherInvestmentRecord = async (payload: OtherInvestmentPayload) => {
   const data = normalizeOtherInvestmentPayload(payload);
   await findOrCreateAssetForPayload(data);
+  if (getDataSource() === "mysql") {
+    await createMysqlOtherInvestmentRecordPage(data);
+    await refreshAssetSummaryByKey(assetKey(data));
+    return;
+  }
+
   const { otherInvestmentDbId } = await ensureDatabases();
   await createPage(otherInvestmentDbId, recordProperties(data));
   await refreshAssetSummaryByKey(assetKey(data));
@@ -422,6 +462,14 @@ export const updateOtherInvestmentRecordById = async (id: string, payload: Other
 export const deleteOtherInvestmentRecordById = async (id: string) => {
   const { records } = await getOtherInvestmentState();
   const existing = records.find((record) => record.id === id);
+  if (getDataSource() === "mysql") {
+    await deleteMysqlOtherInvestmentRecord(id);
+    if (existing) {
+      await refreshAssetSummaryByKey(assetKey(existing));
+    }
+    return;
+  }
+
   await archivePage(id);
   if (existing) {
     await refreshAssetSummaryByKey(assetKey(existing));
@@ -476,6 +524,12 @@ export const deleteOtherInvestmentAssetById = async (id: string) => {
   if (!asset) return;
   const key = assetKey(asset);
   const matchingRecords = records.filter((record) => assetKey(record) === key);
+  if (getDataSource() === "mysql") {
+    await Promise.all(matchingRecords.map((record) => deleteMysqlOtherInvestmentRecord(record.id)));
+    await deleteMysqlOtherInvestmentAsset(id);
+    return;
+  }
+
   await Promise.all(matchingRecords.map((record) => archivePage(record.id)));
   await archivePage(id);
 };
@@ -495,7 +549,11 @@ export const syncOtherInvestmentMarketData = async (
     quote?: AssetMarketQuote;
   }> = [];
 
-  for (const position of targets) {
+  for (const [index, position] of targets.entries()) {
+    if (index > 0) {
+      await sleep(200);
+    }
+
     try {
       const quote = await fetchAssetMarketQuote({
         assetCode: position.assetCode,

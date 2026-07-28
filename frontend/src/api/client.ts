@@ -1,6 +1,8 @@
 import type {
   DashboardSummary,
   DividendRecord,
+  EmailReportConfig,
+  EmailReportConfigPayload,
   MarketQuote,
   MarketSyncResult,
   OtherInvestmentMarketSyncResult,
@@ -68,6 +70,9 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 export const api = {
   getSetupStatus: () => request<SetupStatus>("/api/setup/status"),
   saveSetup: (payload: SetupPayload) => request<{ message: string }>("/api/setup", { method: "POST", body: JSON.stringify(payload) }),
+  getEmailReportConfig: () => request<EmailReportConfig>("/api/setup/email-report"),
+  saveEmailReportConfig: (payload: EmailReportConfigPayload) =>
+    request<{ message: string }>("/api/setup/email-report", { method: "POST", body: JSON.stringify(payload) }),
   init: () => request<{ message: string }>("/api/init", { method: "POST" }),
   getStocks: () => request<StockPlan[]>("/api/stocks"),
   createStock: (payload: StockPayload) =>
