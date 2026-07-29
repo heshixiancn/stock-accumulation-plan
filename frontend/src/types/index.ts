@@ -65,12 +65,16 @@ export interface MarketSyncResult {
   message: string;
   total: number;
   successCount: number;
+  changedCount: number;
+  unchangedCount: number;
   failedCount: number;
   results: Array<{
     id: string;
     stockCode: string;
     stockName: string;
     ok: boolean;
+    changed?: boolean;
+    previousPrice?: number;
     message?: string;
     quote?: MarketQuote;
   }>;
@@ -146,6 +150,7 @@ export interface OtherInvestmentAsset {
   unrealizedProfitLoss: number;
   unrealizedProfitLossRate: number;
   realizedProfitLoss: number;
+  dividendIncome: number;
   totalProfitLoss: number;
   totalProfitLossRate: number;
   isClosed: boolean;
@@ -165,6 +170,7 @@ export interface OtherInvestmentOverview {
     totalCostBasis: number;
     totalUnrealizedProfitLoss: number;
     totalRealizedProfitLoss: number;
+    totalDividendIncome: number;
     totalProfitLoss: number;
     positionCount: number;
     openPositionCount: number;
@@ -180,6 +186,7 @@ export interface OtherInvestmentOverview {
       costBasis: number;
       unrealizedProfitLoss: number;
       realizedProfitLoss: number;
+      dividendIncome: number;
       totalProfitLoss: number;
       positionCount: number;
     }>;

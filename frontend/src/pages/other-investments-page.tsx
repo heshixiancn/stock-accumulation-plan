@@ -116,6 +116,14 @@ const formatLedgerPrice = (value: number, currency = "CNY") =>
     maximumFractionDigits: 3,
   }).format(value || 0);
 
+const formatCostPrice = (value: number, currency = "CNY") =>
+  new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 6,
+  }).format(value || 0);
+
 const formatSignedMoney = (value: number, currency = "CNY") => {
   const formatted = formatMoney(Math.abs(value || 0), currency);
   if (value > 0) return `+${formatted}`;
@@ -683,13 +691,14 @@ export const OtherInvestmentsPage = ({
           {actionMessage ? <div className="mt-3 rounded-2xl bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">{actionMessage}</div> : null}
         </div>
 
-            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.05fr_0.8fr_0.85fr_0.95fr_1.05fr_1.1fr_96px_104px] lg:items-center lg:gap-4">
+            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.05fr_0.7fr_0.85fr_0.8fr_0.95fr_0.9fr_0.9fr_96px_104px] lg:items-center lg:gap-4">
               <div>标的</div>
               <div>类型</div>
               <div>现价 / 成本</div>
               <div>持仓</div>
               <div>持仓市值</div>
-              <div>盈亏</div>
+              <div>持仓盈亏</div>
+              <div>历史盈亏</div>
               <div>状态</div>
               <div className="text-right">操作</div>
             </div>
@@ -702,7 +711,7 @@ export const OtherInvestmentsPage = ({
                 return (
                   <div
                     key={positionAssetKey(item)}
-                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_0.8fr_0.85fr_0.95fr_1.05fr_1.1fr_96px_104px] lg:items-center lg:gap-4"
+                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_0.7fr_0.85fr_0.8fr_0.95fr_0.9fr_0.9fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
                       <a
@@ -744,7 +753,9 @@ export const OtherInvestmentsPage = ({
                     <div className="grid grid-cols-2 gap-1 lg:block">
                       <div className="text-xs text-muted-foreground lg:hidden">现价 / 成本</div>
                       <div className="font-medium">{formatLedgerPrice(item.currentPrice, item.currency)}</div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">成本 {formatLedgerPrice(item.costPrice, item.currency)}</div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        成本 {formatCostPrice(item.costPrice, item.currency)}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
@@ -760,15 +771,25 @@ export const OtherInvestmentsPage = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-xs text-muted-foreground lg:hidden">盈亏</div>
+                      <div className="text-xs text-muted-foreground lg:hidden">持仓盈亏</div>
                       <div className={cn("font-medium", profitToneClass(item.unrealizedProfitLoss))}>
-                        持仓 {formatSignedMoney(item.unrealizedProfitLoss, item.currency)}
-                      </div>
-                      <div className={cn("text-xs lg:mt-1", profitToneClass(item.totalProfitLoss))}>
-                        总计 {formatSignedMoney(item.totalProfitLoss, item.currency)}
+                        {formatSignedMoney(item.unrealizedProfitLoss, item.currency)}
                       </div>
                       <div className="text-xs text-muted-foreground lg:mt-1">
-                        收益率 {formatPercent(item.totalProfitLossRate)}
+                        {formatPercent(item.unrealizedProfitLossRate)}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 lg:block">
+                      <div className="text-xs text-muted-foreground lg:hidden">历史盈亏</div>
+                      <div className={cn("font-medium", profitToneClass(item.realizedProfitLoss))}>
+                        {formatSignedMoney(item.realizedProfitLoss, item.currency)}
+                      </div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        历次卖出累计
+                      </div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        分红 {formatSignedMoney(item.dividendIncome, item.currency)}
                       </div>
                     </div>
 

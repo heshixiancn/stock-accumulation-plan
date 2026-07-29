@@ -20,6 +20,14 @@ export const formatPrice = (value: number) =>
     maximumFractionDigits: 3,
   }).format(value || 0);
 
+export const formatCostPrice = (value: number) =>
+  new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 6,
+  }).format(value || 0);
+
 export const formatNumber = (value: number) =>
   new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: 2,

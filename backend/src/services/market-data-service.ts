@@ -191,7 +191,7 @@ const fetchEastMoneyDailyCloseQuote = async (stock: StockPlan): Promise<MarketQu
   );
 };
 
-const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuote> => {
+const fetchSinaQuote = async (stock: StockPlan): Promise<MarketQuote> => {
   const response = await fetchWithRetry(
     `https://hq.sinajs.cn/list=${getSinaSymbol(stock.stockCode)}`,
     {
@@ -200,7 +200,7 @@ const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuot
         "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
       },
     },
-    "sina previous close",
+    "sina quote",
   );
 
   if (!response.ok) {
@@ -211,8 +211,10 @@ const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuot
   const match = text.match(/="([^"]*)"/);
   const fields = match?.[1]?.split(",") ?? [];
   const previousClose = Number(fields[2] ?? 0);
+  const currentPrice = Number(fields[3] ?? 0);
+  const price = currentPrice > 0 ? currentPrice : previousClose;
 
-  if (!Number.isFinite(previousClose) || previousClose <= 0) {
+  if (!Number.isFinite(price) || price <= 0) {
     throw new HttpError(502, `未获取到 ${stock.stockCode} 的有效行情数据。`);
   }
 
@@ -221,11 +223,11 @@ const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuot
 
   return buildQuote(
     stock,
-    previousClose,
-    "sina-previous-close",
+    price,
+    currentPrice > 0 ? "sina-current-quote" : "sina-previous-close",
     tradeDate,
     fields[0] || meta?.stockName,
-    previousClose,
+    previousClose > 0 ? previousClose : undefined,
     meta?.dividendYield,
   );
 };
@@ -282,9 +284,9 @@ export const fetchStockMarketQuote = async (stock: StockPlan): Promise<MarketQuo
   }
 
   try {
-    return await fetchSinaPreviousCloseQuote(stock);
+    return await fetchSinaQuote(stock);
   } catch (error) {
-    errors.push(`新浪昨收：${getErrorMessage(error)}`);
+    errors.push(`新浪行情：${getErrorMessage(error)}`);
   }
 
   try {

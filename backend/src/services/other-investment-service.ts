@@ -49,6 +49,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
   let holdingQuantity = 0;
   let costBasis = 0;
   let realizedProfitLoss = 0;
+  let dividendIncome = 0;
   let totalBuyAmount = 0;
 
   for (const record of sorted) {
@@ -62,7 +63,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
     }
 
     if (record.tradeType === "分红") {
-      realizedProfitLoss += record.price * record.quantity - feeAndTax;
+      dividendIncome += record.price * record.quantity - feeAndTax;
       continue;
     }
 
@@ -83,6 +84,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
     holdingQuantity,
     costBasis,
     realizedProfitLoss,
+    dividendIncome,
     totalBuyAmount,
     latest: sorted.at(-1) ?? null,
     latestPriceRecord: [...sorted].reverse().find((record) => record.currentPrice > 0 || record.price > 0) ?? null,
@@ -90,12 +92,12 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
 };
 
 const buildPosition = (asset: OtherInvestmentAsset, assetRecords: OtherInvestmentRecord[]): OtherInvestmentPosition => {
-  const { holdingQuantity, costBasis, realizedProfitLoss, totalBuyAmount, latest, latestPriceRecord } =
+  const { holdingQuantity, costBasis, realizedProfitLoss, dividendIncome, totalBuyAmount, latest, latestPriceRecord } =
     calculateRecordSummary(assetRecords);
   const currentPrice = asset.currentPrice || latestPriceRecord?.currentPrice || latestPriceRecord?.price || 0;
   const marketValue = currentPrice * holdingQuantity;
   const unrealizedProfitLoss = marketValue - costBasis;
-  const totalProfitLoss = unrealizedProfitLoss + realizedProfitLoss;
+  const totalProfitLoss = unrealizedProfitLoss + realizedProfitLoss + dividendIncome;
   const normalizedHoldingQuantity = roundQuantity(asset.market, holdingQuantity);
   const isClosed = assetRecords.length > 0 ? normalizedHoldingQuantity === 0 : asset.isClosed;
 
@@ -104,11 +106,12 @@ const buildPosition = (asset: OtherInvestmentAsset, assetRecords: OtherInvestmen
     currentPrice: roundMoney(currentPrice),
     holdingQuantity: normalizedHoldingQuantity,
     costBasis: roundMoney(costBasis),
-    costPrice: normalizedHoldingQuantity > 0 ? roundMoney(costBasis / normalizedHoldingQuantity) : 0,
+    costPrice: normalizedHoldingQuantity > 0 ? roundTo(costBasis / normalizedHoldingQuantity, 6) : 0,
     marketValue: roundMoney(marketValue),
     unrealizedProfitLoss: roundMoney(unrealizedProfitLoss),
     unrealizedProfitLossRate: percentage(unrealizedProfitLoss, costBasis),
     realizedProfitLoss: roundMoney(realizedProfitLoss),
+    dividendIncome: roundMoney(dividendIncome),
     totalProfitLoss: roundMoney(totalProfitLoss),
     totalProfitLossRate: percentage(totalProfitLoss, totalBuyAmount),
     isClosed,
@@ -139,6 +142,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
       costBasis: number;
       unrealizedProfitLoss: number;
       realizedProfitLoss: number;
+      dividendIncome: number;
       totalProfitLoss: number;
       positionCount: number;
     }
@@ -155,6 +159,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
       costBasis: 0,
       unrealizedProfitLoss: 0,
       realizedProfitLoss: 0,
+      dividendIncome: 0,
       totalProfitLoss: 0,
       positionCount: 0,
     };
@@ -162,6 +167,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
     currencySummary.costBasis += position.costBasis;
     currencySummary.unrealizedProfitLoss += position.unrealizedProfitLoss;
     currencySummary.realizedProfitLoss += position.realizedProfitLoss;
+    currencySummary.dividendIncome += position.dividendIncome;
     currencySummary.totalProfitLoss += position.totalProfitLoss;
     currencySummary.positionCount += 1;
     byCurrencyMap.set(position.currency, currencySummary);
@@ -172,6 +178,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
     totalCostBasis: roundMoney(positions.reduce((sum, item) => sum + item.costBasis, 0)),
     totalUnrealizedProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.unrealizedProfitLoss, 0)),
     totalRealizedProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.realizedProfitLoss, 0)),
+    totalDividendIncome: roundMoney(positions.reduce((sum, item) => sum + item.dividendIncome, 0)),
     totalProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.totalProfitLoss, 0)),
     positionCount: positions.length,
     openPositionCount: positions.filter((item) => !item.isClosed).length,
@@ -190,6 +197,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
         costBasis: roundMoney(value.costBasis),
         unrealizedProfitLoss: roundMoney(value.unrealizedProfitLoss),
         realizedProfitLoss: roundMoney(value.realizedProfitLoss),
+        dividendIncome: roundMoney(value.dividendIncome),
         totalProfitLoss: roundMoney(value.totalProfitLoss),
         positionCount: value.positionCount,
       }))
@@ -372,6 +380,7 @@ const ensureAssetPagesForRecords = async (records: OtherInvestmentRecord[], asse
       unrealizedProfitLoss: 0,
       unrealizedProfitLossRate: 0,
       realizedProfitLoss: 0,
+      dividendIncome: 0,
       totalProfitLoss: 0,
       totalProfitLossRate: 0,
       isClosed: false,

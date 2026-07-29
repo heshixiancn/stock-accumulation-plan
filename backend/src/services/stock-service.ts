@@ -137,6 +137,8 @@ export const syncStocksMarketData = async (ids?: string[]) => {
     stockCode: string;
     stockName: string;
     ok: boolean;
+    changed?: boolean;
+    previousPrice?: number;
     message?: string;
     quote?: MarketQuote;
   }> = [];
@@ -153,6 +155,8 @@ export const syncStocksMarketData = async (ids?: string[]) => {
         stockCode: stock.stockCode,
         stockName: stock.stockName,
         ok: true,
+        changed: quote.currentPrice !== stock.currentPrice,
+        previousPrice: stock.currentPrice,
         quote,
       });
     } catch (error) {
@@ -169,6 +173,8 @@ export const syncStocksMarketData = async (ids?: string[]) => {
   return {
     total: targets.length,
     successCount: results.filter((item) => item.ok).length,
+    changedCount: results.filter((item) => item.ok && item.changed).length,
+    unchangedCount: results.filter((item) => item.ok && !item.changed).length,
     failedCount: results.filter((item) => !item.ok).length,
     results,
   };

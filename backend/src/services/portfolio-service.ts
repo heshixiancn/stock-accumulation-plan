@@ -104,7 +104,10 @@ export const buildPortfolioPositions = (
       currentPrice: roundTo(currentPrice),
       targetShares: stock?.targetShares ?? 0,
       holdingShares: roundTo(effectiveHoldingShares),
-      costPrice: roundTo(costPrice),
+      // Keep enough precision for the displayed unit cost to reconcile with
+      // totalHoldingCost and unrealizedProfitLoss. Monetary totals are still
+      // rounded to cents below.
+      costPrice: roundTo(costPrice, 6),
       totalHoldingCost: roundTo(effectiveCostBasis),
       marketValue: roundTo(marketValue),
       unrealizedProfitLoss: roundTo(unrealizedProfitLoss),

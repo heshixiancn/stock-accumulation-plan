@@ -173,6 +173,7 @@ export const mapOtherInvestmentAssetPage = (page: PageObjectResponse): OtherInve
   unrealizedProfitLoss: readNumber(page, "持仓盈亏"),
   unrealizedProfitLossRate: 0,
   realizedProfitLoss: readNumber(page, "已实现盈亏"),
+  dividendIncome: 0,
   totalProfitLoss: readNumber(page, "总盈亏"),
   totalProfitLossRate: 0,
   isClosed: readSelect(page, "状态") === "已清仓",

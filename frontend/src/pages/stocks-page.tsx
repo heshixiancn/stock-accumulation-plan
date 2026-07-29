@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tabs } from "../components/ui/tabs";
 import {
   cn,
+  formatCostPrice,
   formatCurrency,
   formatNumber,
   formatPercent,
@@ -184,7 +185,13 @@ export const StocksPage = ({
               .map((item) => `${item.stockName || item.stockCode}${item.message ? `(${item.message})` : ""}`)
               .join("、")}`
           : "";
-      setActionMessage(`同步完成：成功 ${result.successCount}/${result.total} 只，当前价格和股息率已刷新${failedText}`);
+      const latestQuote = result.results.find((item) => item.ok && item.quote)?.quote;
+      const sourceText = latestQuote
+        ? `；行情日期 ${latestQuote.updatedAt || "未知"}，来源 ${latestQuote.provider}`
+        : "";
+      setActionMessage(
+        `同步完成：成功 ${result.successCount}/${result.total} 只，价格更新 ${result.changedCount} 只、未变化 ${result.unchangedCount} 只${failedText}${sourceText}`,
+      );
     } catch (error) {
       setActionMessage(error instanceof Error ? `同步失败：${error.message}` : "同步收盘价失败");
     }
@@ -238,12 +245,13 @@ export const StocksPage = ({
           ) : null}
 
           <div className="overflow-hidden rounded-2xl border border-border/60 bg-white/75">
-            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.05fr_1.1fr_0.85fr_0.9fr_1.05fr_1.05fr_96px_104px] lg:items-center lg:gap-4">
+            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.05fr_1.05fr_0.85fr_0.9fr_0.9fr_0.9fr_1fr_96px_104px] lg:items-center lg:gap-4">
               <div>股票</div>
               <div>进度</div>
               <div>现价 / 成本</div>
               <div>持仓市值</div>
-              <div>盈亏</div>
+              <div>持仓盈亏</div>
+              <div>历史盈亏</div>
               <div>预计年股息</div>
               <div>状态</div>
               <div className="text-right">操作</div>
@@ -256,7 +264,7 @@ export const StocksPage = ({
                 return (
                   <div
                     key={item.id}
-                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_1.1fr_0.85fr_0.9fr_1.05fr_1.05fr_96px_104px] lg:items-center lg:gap-4"
+                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_1.05fr_0.85fr_0.9fr_0.9fr_0.9fr_1fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
                       <a
@@ -302,7 +310,9 @@ export const StocksPage = ({
                     <div className="grid grid-cols-2 gap-1 lg:block">
                       <div className="text-xs text-muted-foreground lg:hidden">现价 / 成本</div>
                       <div className="font-medium lg:text-left">{formatPrice(item.currentPrice)}</div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">成本 {formatPrice(item.costPrice)}</div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        成本 {formatCostPrice(item.costPrice)}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
@@ -312,14 +322,26 @@ export const StocksPage = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-xs text-muted-foreground lg:hidden">盈亏</div>
+                      <div className="text-xs text-muted-foreground lg:hidden">持仓盈亏</div>
                       <div className={cn("font-medium", profitToneClass(item.unrealizedProfitLoss))}>
-                        持仓 {formatSignedCurrency(item.unrealizedProfitLoss)}
+                        {formatSignedCurrency(item.unrealizedProfitLoss)}
                       </div>
-                      <div className={cn("text-xs lg:mt-1", profitToneClass(item.totalProfitLoss))}>
-                        总计 {formatSignedCurrency(item.totalProfitLoss)}
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        {formatPercent(item.unrealizedProfitLossRate)}
                       </div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">已实现 {formatSignedCurrency(item.realizedProfitLoss)}</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 lg:block">
+                      <div className="text-xs text-muted-foreground lg:hidden">历史盈亏</div>
+                      <div className={cn("font-medium", profitToneClass(item.realizedProfitLoss))}>
+                        {formatSignedCurrency(item.realizedProfitLoss)}
+                      </div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        历次卖出累计
+                      </div>
+                      <div className="text-xs text-muted-foreground lg:mt-1">
+                        股息 {formatSignedCurrency(item.dividendIncome)}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
