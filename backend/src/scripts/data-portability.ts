@@ -103,43 +103,62 @@ const otherRecordPayload = (record: OtherInvestmentRecord): OtherInvestmentPaylo
 });
 
 export const exportPortableData = async (source: "notion" | "mysql"): Promise<PortableData> => {
+  const previousDataSource = process.env.DATA_SOURCE;
   process.env.DATA_SOURCE = source;
-  await initializeDataSource();
 
-  const [stocks, trades, dividends, otherInvestments] = await Promise.all([
-    listStockPlans(),
-    listTrades(),
-    listDividends(),
-    getOtherInvestmentOverview(),
-  ]);
+  try {
+    await initializeDataSource();
 
-  return {
-    exportedAt: new Date().toISOString(),
-    source,
-    stocks: stocks.map(stockPayload),
-    trades: trades.map(tradePayload),
-    dividends: dividends.map(dividendPayload),
-    otherInvestmentAssets: otherInvestments.positions.map(otherAssetPayload),
-    otherInvestmentRecords: otherInvestments.records.map(otherRecordPayload),
-  };
+    const [stocks, trades, dividends, otherInvestments] = await Promise.all([
+      listStockPlans(),
+      listTrades(),
+      listDividends(),
+      getOtherInvestmentOverview(),
+    ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      source,
+      stocks: stocks.map(stockPayload),
+      trades: trades.map(tradePayload),
+      dividends: dividends.map(dividendPayload),
+      otherInvestmentAssets: otherInvestments.positions.map(otherAssetPayload),
+      otherInvestmentRecords: otherInvestments.records.map(otherRecordPayload),
+    };
+  } finally {
+    if (previousDataSource === undefined) {
+      delete process.env.DATA_SOURCE;
+    } else {
+      process.env.DATA_SOURCE = previousDataSource;
+    }
+  }
 };
 
 export const importPortableData = async (target: "notion" | "mysql", data: PortableData) => {
+  const previousDataSource = process.env.DATA_SOURCE;
   process.env.DATA_SOURCE = target;
-  await initializeDataSource();
 
-  for (const stock of data.stocks) await createStock(stock);
-  for (const trade of data.trades) await createTrade(trade);
-  for (const dividend of data.dividends) await createDividend(dividend);
-  for (const asset of data.otherInvestmentAssets) await createOtherInvestmentAsset(asset);
-  for (const record of data.otherInvestmentRecords) await createOtherInvestmentRecord(record);
+  try {
+    await initializeDataSource();
 
-  return {
-    stocks: data.stocks.length,
-    trades: data.trades.length,
-    dividends: data.dividends.length,
-    otherInvestmentAssets: data.otherInvestmentAssets.length,
-    otherInvestmentRecords: data.otherInvestmentRecords.length,
-  };
+    for (const stock of data.stocks) await createStock(stock);
+    for (const trade of data.trades) await createTrade(trade);
+    for (const dividend of data.dividends) await createDividend(dividend);
+    for (const asset of data.otherInvestmentAssets) await createOtherInvestmentAsset(asset);
+    for (const record of data.otherInvestmentRecords) await createOtherInvestmentRecord(record);
+
+    return {
+      stocks: data.stocks.length,
+      trades: data.trades.length,
+      dividends: data.dividends.length,
+      otherInvestmentAssets: data.otherInvestmentAssets.length,
+      otherInvestmentRecords: data.otherInvestmentRecords.length,
+    };
+  } finally {
+    if (previousDataSource === undefined) {
+      delete process.env.DATA_SOURCE;
+    } else {
+      process.env.DATA_SOURCE = previousDataSource;
+    }
+  }
 };
-

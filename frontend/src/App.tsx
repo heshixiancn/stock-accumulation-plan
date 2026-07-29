@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ArrowLeft, Settings } from "lucide-react";
 import { AppShell } from "./components/layout/app-shell";
 import { Card, CardContent } from "./components/ui/card";
+import { Button } from "./components/ui/button";
 import { Tabs } from "./components/ui/tabs";
 import { api } from "./api/client";
 import { useDashboard } from "./hooks/use-dashboard";
@@ -20,6 +22,7 @@ const queryClient = new QueryClient();
 
 const ConfiguredApp = () => {
   const [tab, setTab] = useState("dashboard");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [initMessage, setInitMessage] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -59,21 +62,38 @@ const ConfiguredApp = () => {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs
           value={tab}
-          onChange={setTab}
+          onChange={(value) => {
+            setTab(value);
+            setSettingsOpen(false);
+          }}
           items={[
             { label: "总览", value: "dashboard" },
             { label: "攒股计划", value: "stocks" },
             { label: "其他投资", value: "other-investments" },
-            { label: "设置", value: "settings" },
           ]}
         />
+        <Button
+          className="w-full sm:w-auto"
+          variant={settingsOpen ? "secondary" : "outline"}
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          {settingsOpen ? <ArrowLeft className="mr-2 h-4 w-4" /> : <Settings className="mr-2 h-4 w-4" />}
+          {settingsOpen ? "返回" : "设置"}
+        </Button>
       </div>
 
-      {tab === "dashboard" && dashboard.data && <DashboardPage data={dashboard.data} />}
-      {tab === "stocks" && (
+      {settingsOpen && (
+        <SettingsPage
+          initMessage={initMessage}
+          isInitializing={isInitializing}
+          onInitialize={() => void initializeDatabases(true)}
+        />
+      )}
+      {!settingsOpen && tab === "dashboard" && dashboard.data && <DashboardPage data={dashboard.data} />}
+      {!settingsOpen && tab === "stocks" && (
         <StocksPage
           stocks={stocks.query.data ?? []}
           trades={trades.query.data ?? []}
@@ -118,7 +138,7 @@ const ConfiguredApp = () => {
           }}
         />
       )}
-      {tab === "other-investments" && (
+      {!settingsOpen && tab === "other-investments" && (
         <OtherInvestmentsPage
           data={otherInvestments.query.data}
           submitting={
@@ -147,13 +167,6 @@ const ConfiguredApp = () => {
           onSyncMarkets={async (assets) => {
             return otherInvestments.syncMarketsMutation.mutateAsync(assets);
           }}
-        />
-      )}
-      {tab === "settings" && (
-        <SettingsPage
-          initMessage={initMessage}
-          isInitializing={isInitializing}
-          onInitialize={() => void initializeDatabases(true)}
         />
       )}
     </>

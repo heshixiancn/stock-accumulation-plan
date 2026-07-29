@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Database, Loader2, Mail, RefreshCw, Save, ShieldAlert } from "lucide-react";
+import { Database, Download, Loader2, Mail, RefreshCw, Save, ShieldAlert, Upload } from "lucide-react";
 import { api } from "../api/client";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -39,6 +39,10 @@ export const SettingsPage = ({ initMessage, isInitializing, onInitialize }: Sett
   const [emailMessage, setEmailMessage] = useState("");
   const [emailLoading, setEmailLoading] = useState(true);
   const [emailSaving, setEmailSaving] = useState(false);
+  const [exportSource, setExportSource] = useState<"notion" | "mysql">("mysql");
+  const [importTarget, setImportTarget] = useState<"notion" | "mysql">("mysql");
+  const [dataMessage, setDataMessage] = useState("");
+  const [dataWorking, setDataWorking] = useState(false);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -86,6 +90,59 @@ export const SettingsPage = ({ initMessage, isInitializing, onInitialize }: Sett
       setEmailMessage(error instanceof Error ? `保存失败：${error.message}` : "保存失败");
     } finally {
       setEmailSaving(false);
+    }
+  };
+
+  const summarizeImported = (imported: Record<string, number>) =>
+    `股票 ${imported.stocks ?? 0}，交易 ${imported.trades ?? 0}，股息 ${imported.dividends ?? 0}，其他标的 ${imported.otherInvestmentAssets ?? 0}，其他流水 ${imported.otherInvestmentRecords ?? 0}`;
+
+  const exportData = async () => {
+    setDataWorking(true);
+    try {
+      const blob = await api.exportData(exportSource);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `stock-accumulation-${exportSource}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setDataMessage(`${exportSource === "mysql" ? "MySQL" : "Notion"} 数据已导出。`);
+    } catch (error) {
+      setDataMessage(error instanceof Error ? `导出失败：${error.message}` : "导出失败");
+    } finally {
+      setDataWorking(false);
+    }
+  };
+
+  const importData = async (file: File | null) => {
+    if (!file) return;
+    setDataWorking(true);
+    try {
+      const payload = JSON.parse(await file.text()) as unknown;
+      const response = await api.importData(importTarget, payload);
+      setDataMessage(`${response.message}：${summarizeImported(response.imported)}`);
+    } catch (error) {
+      setDataMessage(error instanceof Error ? `导入失败：${error.message}` : "导入失败");
+    } finally {
+      setDataWorking(false);
+    }
+  };
+
+  const syncMysqlToNotion = async () => {
+    if (!window.confirm("确认将 MySQL 当前数据同步到 Notion 吗？当前同步为追加导入，目标 Notion 已有相同数据时可能重复。")) {
+      return;
+    }
+
+    setDataWorking(true);
+    try {
+      const response = await api.syncMysqlToNotion();
+      setDataMessage(`${response.message}：${summarizeImported(response.imported)}`);
+    } catch (error) {
+      setDataMessage(error instanceof Error ? `同步失败：${error.message}` : "同步失败");
+    } finally {
+      setDataWorking(false);
     }
   };
 
@@ -196,6 +253,83 @@ export const SettingsPage = ({ initMessage, isInitializing, onInitialize }: Sett
                 {emailSaving ? "保存中..." : "保存邮件配置"}
               </Button>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-2xl bg-secondary p-3 text-secondary-foreground">
+              <Database className="h-5 w-5" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle>数据导入导出</CardTitle>
+              <p className="text-sm text-muted-foreground">导出 Notion 或 MySQL 为 JSON，也可以从 JSON 导入到指定数据源。</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="导出来源">
+              <Select value={exportSource} onValueChange={(value) => setExportSource(value as "notion" | "mysql")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mysql">MySQL</SelectItem>
+                  <SelectItem value="notion">Notion</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="导入目标">
+              <Select value={importTarget} onValueChange={(value) => setImportTarget(value as "notion" | "mysql")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mysql">MySQL</SelectItem>
+                  <SelectItem value="notion">Notion</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Button disabled={dataWorking} onClick={exportData}>
+              {dataWorking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              导出 JSON
+            </Button>
+            <label className="inline-flex">
+              <input
+                className="hidden"
+                type="file"
+                accept="application/json,.json"
+                disabled={dataWorking}
+                onChange={(event) => {
+                  void importData(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+              <span className="inline-flex h-10 cursor-pointer items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90">
+                {dataWorking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                选择 JSON 并导入
+              </span>
+            </label>
+            <Button variant="secondary" disabled={dataWorking} onClick={syncMysqlToNotion}>
+              {dataWorking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              MySQL 同步到 Notion
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+            当前导入和同步不会去重。目标数据源已有相同数据时，重复导入会产生重复记录。
+          </div>
+
+          {dataMessage && (
+            <div className="rounded-2xl border border-border bg-white/70 p-4 text-sm text-muted-foreground">
+              {dataMessage}
+            </div>
           )}
         </CardContent>
       </Card>

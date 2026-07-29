@@ -19,7 +19,7 @@ app.use(
     origin: env.CORS_ORIGIN.split(",").map((item) => item.trim()),
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

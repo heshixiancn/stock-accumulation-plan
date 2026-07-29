@@ -45,6 +45,7 @@ type OtherInvestmentAssetPayload = Pick<
   "assetCode" | "assetName" | "market" | "assetType" | "currentPrice" | "currency" | "notes"
 >;
 type OtherInvestmentSyncAsset = Pick<OtherInvestmentPosition, "assetCode" | "assetName" | "market" | "currency">;
+type DataSource = "notion" | "mysql";
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -73,6 +74,23 @@ export const api = {
   getEmailReportConfig: () => request<EmailReportConfig>("/api/setup/email-report"),
   saveEmailReportConfig: (payload: EmailReportConfigPayload) =>
     request<{ message: string }>("/api/setup/email-report", { method: "POST", body: JSON.stringify(payload) }),
+  exportData: async (source: DataSource) => {
+    const response = await fetch(`/api/setup/data/export?source=${source}`);
+    if (!response.ok) {
+      const error = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(error?.message ?? "导出失败");
+    }
+    return response.blob();
+  },
+  importData: (target: DataSource, payload: unknown) =>
+    request<{ message: string; imported: Record<string, number> }>(`/api/setup/data/import?target=${target}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  syncMysqlToNotion: () =>
+    request<{ message: string; imported: Record<string, number> }>("/api/setup/data/sync-mysql-to-notion", {
+      method: "POST",
+    }),
   init: () => request<{ message: string }>("/api/init", { method: "POST" }),
   getStocks: () => request<StockPlan[]>("/api/stocks"),
   createStock: (payload: StockPayload) =>
