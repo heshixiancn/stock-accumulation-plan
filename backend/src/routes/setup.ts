@@ -1,11 +1,37 @@
 import { Router } from "express";
 import { z } from "zod";
-import { getSetupStatus, saveNotionConfig } from "../config/env.js";
+import { getEnv, getSetupStatus, saveEmailReportConfig, saveNotionConfig } from "../config/env.js";
 import { ensureDatabases, validateNotionAccess } from "../lib/notion.js";
+import { exportPortableData, importPortableData, type PortableData } from "../scripts/data-portability.js";
 
 const setupPayloadSchema = z.object({
   notionToken: z.string().trim().min(1, "NOTION_TOKEN 不能为空"),
   notionParentPageId: z.string().trim().min(1, "NOTION_PARENT_PAGE_ID 不能为空"),
+});
+
+const emailReportPayloadSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^\d{2}:\d{2}$/, "发送时间格式应为 HH:mm"),
+  timezone: z.string().trim().min(1, "时区不能为空"),
+  smtpHost: z.string().trim(),
+  smtpPort: z.coerce.number().int().positive(),
+  smtpSecure: z.boolean(),
+  smtpUser: z.string().trim(),
+  smtpPassword: z.string().optional(),
+  emailFrom: z.string().trim(),
+  emailTo: z.string().trim(),
+});
+
+const dataSourceSchema = z.enum(["notion", "mysql"]);
+
+const portableDataSchema = z.object({
+  exportedAt: z.string(),
+  source: dataSourceSchema,
+  stocks: z.array(z.record(z.unknown())),
+  trades: z.array(z.record(z.unknown())),
+  dividends: z.array(z.record(z.unknown())),
+  otherInvestmentAssets: z.array(z.record(z.unknown())),
+  otherInvestmentRecords: z.array(z.record(z.unknown())),
 });
 
 export const setupRouter = Router();
@@ -22,6 +48,70 @@ setupRouter.get("/status", (_req, res) => {
     configured: status.configured,
     missing: status.missing,
   });
+});
+
+setupRouter.get("/email-report", (_req, res) => {
+  const env = getEnv();
+  res.json({
+    enabled: env.DAILY_EMAIL_REPORT_ENABLED,
+    time: env.DAILY_EMAIL_REPORT_TIME,
+    timezone: env.DAILY_EMAIL_REPORT_TIMEZONE,
+    smtpHost: env.SMTP_HOST,
+    smtpPort: env.SMTP_PORT,
+    smtpSecure: env.SMTP_SECURE,
+    smtpUser: env.SMTP_USER,
+    smtpPasswordConfigured: Boolean(env.SMTP_PASSWORD),
+    emailFrom: env.EMAIL_FROM,
+    emailTo: env.EMAIL_TO,
+  });
+});
+
+setupRouter.post("/email-report", (req, res, next) => {
+  try {
+    const payload = emailReportPayloadSchema.parse(req.body);
+    saveEmailReportConfig({
+      ...payload,
+      smtpPassword: payload.smtpPassword?.trim() ? payload.smtpPassword : undefined,
+    });
+    res.json({ message: "邮件报告配置已保存" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+setupRouter.get("/data/export", async (req, res, next) => {
+  try {
+    const source = dataSourceSchema.parse(req.query.source);
+    const data = await exportPortableData(source);
+    const filename = `stock-accumulation-${source}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(`${JSON.stringify(data, null, 2)}\n`);
+  } catch (error) {
+    next(error);
+  }
+});
+
+setupRouter.post("/data/import", async (req, res, next) => {
+  try {
+    const target = dataSourceSchema.parse(req.query.target);
+    const data = portableDataSchema.parse(req.body) as PortableData;
+    const imported = await importPortableData(target, data);
+    res.json({ message: "导入完成", imported });
+  } catch (error) {
+    next(error);
+  }
+});
+
+setupRouter.post("/data/sync-mysql-to-notion", async (_req, res, next) => {
+  try {
+    const data = await exportPortableData("mysql");
+    const imported = await importPortableData("notion", data);
+    res.json({ message: "MySQL 已同步到 Notion", imported });
+  } catch (error) {
+    next(error);
+  }
 });
 
 setupRouter.post("/", async (req, res, next) => {

@@ -19,9 +19,21 @@ import {
   type OtherInvestmentAssetPayload,
   type OtherInvestmentPayload,
 } from "./validation.js";
+import { getDataSource } from "./data-source.js";
+import {
+  createMysqlOtherInvestmentAsset,
+  createMysqlOtherInvestmentRecord as createMysqlOtherInvestmentRecordPage,
+  deleteMysqlOtherInvestmentAsset,
+  deleteMysqlOtherInvestmentRecord,
+  listMysqlOtherInvestmentAssets,
+  listMysqlOtherInvestmentRecords,
+  updateMysqlOtherInvestmentAsset,
+  updateMysqlOtherInvestmentRecord,
+} from "./mysql-other-investment-service.js";
 
 const roundMoney = (value: number) => roundTo(value, 4);
 const roundQuantity = (market: OtherInvestmentMarket, value: number) => (market === "美股" ? roundTo(value, 4) : Math.round(value || 0));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const assetKey = (record: Pick<OtherInvestmentRecord | OtherInvestmentAsset, "market" | "assetCode" | "assetName">) =>
   `${record.market}:${record.assetCode || record.assetName}`.trim();
@@ -37,6 +49,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
   let holdingQuantity = 0;
   let costBasis = 0;
   let realizedProfitLoss = 0;
+  let dividendIncome = 0;
   let totalBuyAmount = 0;
 
   for (const record of sorted) {
@@ -50,7 +63,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
     }
 
     if (record.tradeType === "分红") {
-      realizedProfitLoss += record.price * record.quantity - feeAndTax;
+      dividendIncome += record.price * record.quantity - feeAndTax;
       continue;
     }
 
@@ -71,6 +84,7 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
     holdingQuantity,
     costBasis,
     realizedProfitLoss,
+    dividendIncome,
     totalBuyAmount,
     latest: sorted.at(-1) ?? null,
     latestPriceRecord: [...sorted].reverse().find((record) => record.currentPrice > 0 || record.price > 0) ?? null,
@@ -78,12 +92,12 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
 };
 
 const buildPosition = (asset: OtherInvestmentAsset, assetRecords: OtherInvestmentRecord[]): OtherInvestmentPosition => {
-  const { holdingQuantity, costBasis, realizedProfitLoss, totalBuyAmount, latest, latestPriceRecord } =
+  const { holdingQuantity, costBasis, realizedProfitLoss, dividendIncome, totalBuyAmount, latest, latestPriceRecord } =
     calculateRecordSummary(assetRecords);
   const currentPrice = asset.currentPrice || latestPriceRecord?.currentPrice || latestPriceRecord?.price || 0;
   const marketValue = currentPrice * holdingQuantity;
   const unrealizedProfitLoss = marketValue - costBasis;
-  const totalProfitLoss = unrealizedProfitLoss + realizedProfitLoss;
+  const totalProfitLoss = unrealizedProfitLoss + realizedProfitLoss + dividendIncome;
   const normalizedHoldingQuantity = roundQuantity(asset.market, holdingQuantity);
   const isClosed = assetRecords.length > 0 ? normalizedHoldingQuantity === 0 : asset.isClosed;
 
@@ -92,11 +106,12 @@ const buildPosition = (asset: OtherInvestmentAsset, assetRecords: OtherInvestmen
     currentPrice: roundMoney(currentPrice),
     holdingQuantity: normalizedHoldingQuantity,
     costBasis: roundMoney(costBasis),
-    costPrice: normalizedHoldingQuantity > 0 ? roundMoney(costBasis / normalizedHoldingQuantity) : 0,
+    costPrice: normalizedHoldingQuantity > 0 ? roundTo(costBasis / normalizedHoldingQuantity, 6) : 0,
     marketValue: roundMoney(marketValue),
     unrealizedProfitLoss: roundMoney(unrealizedProfitLoss),
     unrealizedProfitLossRate: percentage(unrealizedProfitLoss, costBasis),
     realizedProfitLoss: roundMoney(realizedProfitLoss),
+    dividendIncome: roundMoney(dividendIncome),
     totalProfitLoss: roundMoney(totalProfitLoss),
     totalProfitLossRate: percentage(totalProfitLoss, totalBuyAmount),
     isClosed,
@@ -127,6 +142,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
       costBasis: number;
       unrealizedProfitLoss: number;
       realizedProfitLoss: number;
+      dividendIncome: number;
       totalProfitLoss: number;
       positionCount: number;
     }
@@ -143,6 +159,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
       costBasis: 0,
       unrealizedProfitLoss: 0,
       realizedProfitLoss: 0,
+      dividendIncome: 0,
       totalProfitLoss: 0,
       positionCount: 0,
     };
@@ -150,6 +167,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
     currencySummary.costBasis += position.costBasis;
     currencySummary.unrealizedProfitLoss += position.unrealizedProfitLoss;
     currencySummary.realizedProfitLoss += position.realizedProfitLoss;
+    currencySummary.dividendIncome += position.dividendIncome;
     currencySummary.totalProfitLoss += position.totalProfitLoss;
     currencySummary.positionCount += 1;
     byCurrencyMap.set(position.currency, currencySummary);
@@ -160,6 +178,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
     totalCostBasis: roundMoney(positions.reduce((sum, item) => sum + item.costBasis, 0)),
     totalUnrealizedProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.unrealizedProfitLoss, 0)),
     totalRealizedProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.realizedProfitLoss, 0)),
+    totalDividendIncome: roundMoney(positions.reduce((sum, item) => sum + item.dividendIncome, 0)),
     totalProfitLoss: roundMoney(positions.reduce((sum, item) => sum + item.totalProfitLoss, 0)),
     positionCount: positions.length,
     openPositionCount: positions.filter((item) => !item.isClosed).length,
@@ -178,6 +197,7 @@ const buildSummary = (positions: OtherInvestmentPosition[]): OtherInvestmentSumm
         costBasis: roundMoney(value.costBasis),
         unrealizedProfitLoss: roundMoney(value.unrealizedProfitLoss),
         realizedProfitLoss: roundMoney(value.realizedProfitLoss),
+        dividendIncome: roundMoney(value.dividendIncome),
         totalProfitLoss: roundMoney(value.totalProfitLoss),
         positionCount: value.positionCount,
       }))
@@ -279,12 +299,20 @@ const recordPayload = (record: OtherInvestmentRecord, updates: Partial<OtherInve
 });
 
 const listOtherInvestmentAssets = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlOtherInvestmentAssets();
+  }
+
   const { otherInvestmentAssetDbId } = await ensureDatabases();
   const response = await queryDatabase(otherInvestmentAssetDbId);
   return response.results.filter(isPageObject).map(mapOtherInvestmentAssetPage);
 };
 
 export const listOtherInvestmentRecords = async () => {
+  if (getDataSource() === "mysql") {
+    return listMysqlOtherInvestmentRecords();
+  }
+
   const { otherInvestmentDbId } = await ensureDatabases();
   const response = await queryDatabase(otherInvestmentDbId);
   return response.results
@@ -296,7 +324,11 @@ export const listOtherInvestmentRecords = async () => {
     });
 };
 
-const createAssetPage = async (payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+export const createOtherInvestmentAsset = async (payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+  if (getDataSource() === "mysql") {
+    return createMysqlOtherInvestmentAsset(payload);
+  }
+
   const { otherInvestmentAssetDbId } = await ensureDatabases();
   const response = await createPage(otherInvestmentAssetDbId, assetProperties(payload, summary));
   if (!("properties" in response)) {
@@ -306,10 +338,20 @@ const createAssetPage = async (payload: OtherInvestmentAssetPayload, summary?: O
 };
 
 const updateAssetPage = async (id: string, payload: OtherInvestmentAssetPayload, summary?: OtherInvestmentPosition) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlOtherInvestmentAsset(id, payload);
+    return;
+  }
+
   await updatePage(id, assetProperties(payload, summary));
 };
 
 const updateRecordPage = async (id: string, payload: OtherInvestmentPayload) => {
+  if (getDataSource() === "mysql") {
+    await updateMysqlOtherInvestmentRecord(id, payload);
+    return;
+  }
+
   await updatePage(id, recordProperties(payload));
 };
 
@@ -338,13 +380,14 @@ const ensureAssetPagesForRecords = async (records: OtherInvestmentRecord[], asse
       unrealizedProfitLoss: 0,
       unrealizedProfitLossRate: 0,
       realizedProfitLoss: 0,
+      dividendIncome: 0,
       totalProfitLoss: 0,
       totalProfitLossRate: 0,
       isClosed: false,
       notes: "",
     };
     const position = buildPosition(virtualAsset, assetRecords);
-    const created = await createAssetPage(assetPayloadFromPosition(position), position);
+    const created = await createOtherInvestmentAsset(assetPayloadFromPosition(position), position);
     nextAssets.push(created);
     existingKeys.add(key);
   }
@@ -395,13 +438,19 @@ const findOrCreateAssetForPayload = async (payload: OtherInvestmentPayload) => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } satisfies OtherInvestmentRecord;
-  const created = await createAssetPage(assetPayloadFromRecord(recordLike));
+  const created = await createOtherInvestmentAsset(assetPayloadFromRecord(recordLike));
   return { asset: created, records };
 };
 
 export const createOtherInvestmentRecord = async (payload: OtherInvestmentPayload) => {
   const data = normalizeOtherInvestmentPayload(payload);
   await findOrCreateAssetForPayload(data);
+  if (getDataSource() === "mysql") {
+    await createMysqlOtherInvestmentRecordPage(data);
+    await refreshAssetSummaryByKey(assetKey(data));
+    return;
+  }
+
   const { otherInvestmentDbId } = await ensureDatabases();
   await createPage(otherInvestmentDbId, recordProperties(data));
   await refreshAssetSummaryByKey(assetKey(data));
@@ -422,6 +471,14 @@ export const updateOtherInvestmentRecordById = async (id: string, payload: Other
 export const deleteOtherInvestmentRecordById = async (id: string) => {
   const { records } = await getOtherInvestmentState();
   const existing = records.find((record) => record.id === id);
+  if (getDataSource() === "mysql") {
+    await deleteMysqlOtherInvestmentRecord(id);
+    if (existing) {
+      await refreshAssetSummaryByKey(assetKey(existing));
+    }
+    return;
+  }
+
   await archivePage(id);
   if (existing) {
     await refreshAssetSummaryByKey(assetKey(existing));
@@ -476,6 +533,12 @@ export const deleteOtherInvestmentAssetById = async (id: string) => {
   if (!asset) return;
   const key = assetKey(asset);
   const matchingRecords = records.filter((record) => assetKey(record) === key);
+  if (getDataSource() === "mysql") {
+    await Promise.all(matchingRecords.map((record) => deleteMysqlOtherInvestmentRecord(record.id)));
+    await deleteMysqlOtherInvestmentAsset(id);
+    return;
+  }
+
   await Promise.all(matchingRecords.map((record) => archivePage(record.id)));
   await archivePage(id);
 };
@@ -495,7 +558,11 @@ export const syncOtherInvestmentMarketData = async (
     quote?: AssetMarketQuote;
   }> = [];
 
-  for (const position of targets) {
+  for (const [index, position] of targets.entries()) {
+    if (index > 0) {
+      await sleep(200);
+    }
+
     try {
       const quote = await fetchAssetMarketQuote({
         assetCode: position.assetCode,

@@ -1,15 +1,11 @@
 import { Router } from "express";
-import { ensureDatabases } from "../lib/notion.js";
+import { initializeDataSource } from "../services/data-source.js";
 
 export const initRouter = Router();
 
 initRouter.post("/", async (_req, res, next) => {
   try {
-    const databases = await ensureDatabases();
-    res.json({
-      message: "Notion 数据库已初始化",
-      databases,
-    });
+    res.json(await initializeDataSource());
   } catch (error) {
     next(error);
   }

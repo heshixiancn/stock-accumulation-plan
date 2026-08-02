@@ -18,15 +18,54 @@ export interface AssetMarketQuote {
   updatedAt?: string;
 }
 
+const MARKET_REQUEST_TIMEOUT_MS = 8000;
+const MARKET_REQUEST_RETRIES = 2;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "unknown error");
+
+const fetchWithRetry = async (url: string, init: RequestInit, label: string) => {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MARKET_REQUEST_RETRIES + 1; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), MARKET_REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+
+      if (response.ok || (response.status < 500 && response.status !== 429)) {
+        return response;
+      }
+
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (attempt <= MARKET_REQUEST_RETRIES) {
+      await sleep(350 * attempt);
+    }
+  }
+
+  throw new Error(`${label}: ${getErrorMessage(lastError)}`);
+};
+
 const getEastMoneySecId = (stockCode: string) => {
   const normalized = stockCode.trim();
-  if (/^(5|6|9)/.test(normalized)) return `1.${normalized}`;
+  if (/^(5|6|9|11)/.test(normalized)) return `1.${normalized}`;
   return `0.${normalized}`;
 };
 
 const getSinaSymbol = (stockCode: string) => {
   const normalized = stockCode.trim();
-  if (/^(5|6|9)/.test(normalized)) return `sh${normalized}`;
+  if (/^(5|6|9|11)/.test(normalized)) return `sh${normalized}`;
   return `sz${normalized}`;
 };
 
@@ -70,12 +109,16 @@ const fetchEastMoneyQuoteMeta = async (stock: StockPlan) => {
     secid: getEastMoneySecId(stock.stockCode),
     fields: "f57,f58,f126",
   });
-  const response = await fetch(`https://push2.eastmoney.com/api/qt/stock/get?${query.toString()}`, {
-    headers: {
-      Referer: "https://quote.eastmoney.com/",
-      "User-Agent": "stock-accumulator-notion/1.0",
+  const response = await fetchWithRetry(
+    `https://push2.eastmoney.com/api/qt/stock/get?${query.toString()}`,
+    {
+      headers: {
+        Referer: "https://quote.eastmoney.com/",
+        "User-Agent": "stock-accumulator-notion/1.0",
+      },
     },
-  });
+    "eastmoney quote meta",
+  );
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -105,12 +148,16 @@ const fetchEastMoneyDailyCloseQuote = async (stock: StockPlan): Promise<MarketQu
     end: "20500101",
     lmt: "1",
   });
-  const response = await fetch(`https://push2his.eastmoney.com/api/qt/stock/kline/get?${query.toString()}`, {
-    headers: {
-      Referer: "https://quote.eastmoney.com/",
-      "User-Agent": "stock-accumulator-notion/1.0",
+  const response = await fetchWithRetry(
+    `https://push2his.eastmoney.com/api/qt/stock/kline/get?${query.toString()}`,
+    {
+      headers: {
+        Referer: "https://quote.eastmoney.com/",
+        "User-Agent": "stock-accumulator-notion/1.0",
+      },
     },
-  });
+    "eastmoney daily close",
+  );
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -144,13 +191,17 @@ const fetchEastMoneyDailyCloseQuote = async (stock: StockPlan): Promise<MarketQu
   );
 };
 
-const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuote> => {
-  const response = await fetch(`https://hq.sinajs.cn/list=${getSinaSymbol(stock.stockCode)}`, {
-    headers: {
-      Referer: "https://finance.sina.com.cn/",
-      "User-Agent": "stock-accumulator-notion/1.0",
+const fetchSinaQuote = async (stock: StockPlan): Promise<MarketQuote> => {
+  const response = await fetchWithRetry(
+    `https://hq.sinajs.cn/list=${getSinaSymbol(stock.stockCode)}`,
+    {
+      headers: {
+        Referer: "https://finance.sina.com.cn/",
+        "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
+      },
     },
-  });
+    "sina quote",
+  );
 
   if (!response.ok) {
     throw new HttpError(502, "行情接口请求失败，请稍后重试。", `HTTP ${response.status}`);
@@ -160,8 +211,10 @@ const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuot
   const match = text.match(/="([^"]*)"/);
   const fields = match?.[1]?.split(",") ?? [];
   const previousClose = Number(fields[2] ?? 0);
+  const currentPrice = Number(fields[3] ?? 0);
+  const price = currentPrice > 0 ? currentPrice : previousClose;
 
-  if (!Number.isFinite(previousClose) || previousClose <= 0) {
+  if (!Number.isFinite(price) || price <= 0) {
     throw new HttpError(502, `未获取到 ${stock.stockCode} 的有效行情数据。`);
   }
 
@@ -170,21 +223,79 @@ const fetchSinaPreviousCloseQuote = async (stock: StockPlan): Promise<MarketQuot
 
   return buildQuote(
     stock,
-    previousClose,
-    "sina-previous-close",
+    price,
+    currentPrice > 0 ? "sina-current-quote" : "sina-previous-close",
     tradeDate,
     fields[0] || meta?.stockName,
-    previousClose,
+    previousClose > 0 ? previousClose : undefined,
     meta?.dividendYield,
   );
 };
 
+const fetchTencentAQuote = async (stock: StockPlan): Promise<MarketQuote> => {
+  const response = await fetchWithRetry(
+    `https://qt.gtimg.cn/q=${getSinaSymbol(stock.stockCode)}`,
+    {
+      headers: {
+        Referer: "https://gu.qq.com/",
+        "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
+      },
+    },
+    "tencent a quote",
+  );
+
+  if (!response.ok) {
+    throw new HttpError(502, "行情接口请求失败，请稍后重试。", `HTTP ${response.status}`);
+  }
+
+  const text = decodeQuoteResponse(await response.arrayBuffer());
+  const match = text.match(/="([^"]*)"/);
+  const fields = match?.[1]?.split("~") ?? [];
+  const stockName = fields[1];
+  const currentPrice = Number(fields[3] ?? 0);
+  const previousClose = Number(fields[4] ?? 0);
+  const tradeDateRaw = fields[30];
+  const updatedAt = tradeDateRaw && tradeDateRaw.length >= 8
+    ? `${tradeDateRaw.slice(0, 4)}-${tradeDateRaw.slice(4, 6)}-${tradeDateRaw.slice(6, 8)}`
+    : undefined;
+
+  const price = currentPrice > 0 ? currentPrice : previousClose;
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new HttpError(502, `未获取到 ${stock.stockCode} 的有效腾讯行情数据。`);
+  }
+
+  return buildQuote(
+    stock,
+    price,
+    "tencent-a-quote",
+    updatedAt,
+    stockName,
+    previousClose > 0 ? previousClose : undefined,
+  );
+};
+
 export const fetchStockMarketQuote = async (stock: StockPlan): Promise<MarketQuote> => {
+  const errors: string[] = [];
+
   try {
     return await fetchEastMoneyDailyCloseQuote(stock);
-  } catch {
-    return fetchSinaPreviousCloseQuote(stock);
+  } catch (error) {
+    errors.push(`东方财富日K：${getErrorMessage(error)}`);
   }
+
+  try {
+    return await fetchSinaQuote(stock);
+  } catch (error) {
+    errors.push(`新浪行情：${getErrorMessage(error)}`);
+  }
+
+  try {
+    return await fetchTencentAQuote(stock);
+  } catch (error) {
+    errors.push(`腾讯行情：${getErrorMessage(error)}`);
+  }
+
+  throw new HttpError(502, `未获取到 ${stock.stockCode} 的有效行情数据。`, errors.join("; "));
 };
 
 const toStockPlanTarget = (target: AssetMarketTarget): StockPlan => ({
@@ -257,15 +368,17 @@ const parseEastMoneyScaledPrice = (value: unknown, decimals: unknown) => {
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue / divisor : 0;
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const fetchYahooDailyCloseQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
   const symbol = getYahooSymbol(target);
-  const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=10d&interval=1d`, {
-    headers: {
-      "User-Agent": "stock-accumulator-notion/1.0",
+  const response = await fetchWithRetry(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=10d&interval=1d`,
+    {
+      headers: {
+        "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
+      },
     },
-  });
+    "yahoo daily close",
+  );
 
   if (!response.ok) {
     throw new HttpError(502, `行情接口请求失败：${target.assetName || target.assetCode}（${symbol}）`, `HTTP ${response.status}`);
@@ -331,12 +444,16 @@ const fetchEastMoneyGlobalQuote = async (target: AssetMarketTarget): Promise<Ass
           secid,
           fields: "f43,f57,f58,f59,f60",
         });
-        const response = await fetch(`https://push2.eastmoney.com/api/qt/stock/get?${query.toString()}`, {
-          headers: {
-            Referer: "https://quote.eastmoney.com/",
-            "User-Agent": "stock-accumulator-notion/1.0",
+        const response = await fetchWithRetry(
+          `https://push2.eastmoney.com/api/qt/stock/get?${query.toString()}`,
+          {
+            headers: {
+              Referer: "https://quote.eastmoney.com/",
+              "User-Agent": "stock-accumulator-notion/1.0",
+            },
           },
-        });
+          "eastmoney global quote",
+        );
 
         if (!response.ok) {
           errors.push(`${secid}#${attempt}: HTTP ${response.status}`);
@@ -367,7 +484,7 @@ const fetchEastMoneyGlobalQuote = async (target: AssetMarketTarget): Promise<Ass
           provider: "eastmoney-global-quote",
         };
       } catch (error) {
-        errors.push(`${secid}#${attempt}: ${error instanceof Error ? error.message : "unknown error"}`);
+        errors.push(`${secid}#${attempt}: ${getErrorMessage(error)}`);
         await sleep(250 * attempt);
       }
     }
@@ -378,6 +495,61 @@ const fetchEastMoneyGlobalQuote = async (target: AssetMarketTarget): Promise<Ass
     `行情接口请求失败：${target.assetName || target.assetCode}（${secIds.join(" / ")}）`,
     errors.join("; "),
   );
+};
+
+const getTencentGlobalSymbol = (target: AssetMarketTarget) => {
+  const code = target.assetCode.trim().replace(/\.HK$/i, "").replace(/\.US$/i, "");
+  if (!code) {
+    throw new HttpError(400, `${target.assetName || "标的"} 缺少资产代码，无法同步行情。`);
+  }
+
+  if (target.market === "港股") return `r_hk${code.padStart(5, "0")}`;
+  if (target.market === "美股") return `us${code.toUpperCase()}`;
+  throw new HttpError(400, `暂不支持同步 ${target.market} 的腾讯全球行情。`);
+};
+
+const normalizeTencentDate = (value?: string) => {
+  if (!value) return undefined;
+  const match = value.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : undefined;
+};
+
+const fetchTencentGlobalQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
+  const symbol = getTencentGlobalSymbol(target);
+  const response = await fetchWithRetry(
+    `https://qt.gtimg.cn/q=${symbol}`,
+    {
+      headers: {
+        Referer: "https://gu.qq.com/",
+        "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
+      },
+    },
+    "tencent global quote",
+  );
+
+  if (!response.ok) {
+    throw new HttpError(502, `行情接口请求失败：${target.assetName || target.assetCode}（${symbol}）`, `HTTP ${response.status}`);
+  }
+
+  const text = decodeQuoteResponse(await response.arrayBuffer());
+  const match = text.match(/="([^"]*)"/);
+  const fields = match?.[1]?.split("~") ?? [];
+  const currentPrice = Number(fields[3] ?? 0);
+  const previousClose = Number(fields[4] ?? 0);
+  const price = currentPrice > 0 ? currentPrice : previousClose;
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new HttpError(502, `未获取到 ${target.assetName || target.assetCode}（${symbol}）的有效腾讯行情。`);
+  }
+
+  return {
+    assetCode: target.assetCode,
+    assetName: fields[1] || target.assetName,
+    market: target.market,
+    currentPrice: roundTo(price, 4),
+    provider: currentPrice > 0 ? "tencent-global-quote" : "tencent-global-previous-close",
+    updatedAt: normalizeTencentDate(fields[30]),
+  };
 };
 
 export const fetchAssetMarketQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
@@ -394,11 +566,26 @@ export const fetchAssetMarketQuote = async (target: AssetMarketTarget): Promise<
   }
 
   if (target.market === "美股" || target.market === "港股") {
+    const errors: string[] = [];
+    try {
+      return await fetchTencentGlobalQuote(target);
+    } catch (error) {
+      errors.push(`腾讯：${getErrorMessage(error)}`);
+    }
+
     try {
       return await fetchYahooDailyCloseQuote(target);
-    } catch {
-      return fetchEastMoneyGlobalQuote(target);
+    } catch (error) {
+      errors.push(`Yahoo：${getErrorMessage(error)}`);
     }
+
+    try {
+      return await fetchEastMoneyGlobalQuote(target);
+    } catch (error) {
+      errors.push(`东方财富：${getErrorMessage(error)}`);
+    }
+
+    throw new HttpError(502, `未获取到 ${target.assetName || target.assetCode} 的有效行情数据。`, errors.join("; "));
   }
 
   throw new HttpError(400, `暂不支持同步 ${target.market} 的行情。`);

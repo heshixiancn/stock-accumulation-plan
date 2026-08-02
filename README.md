@@ -133,9 +133,10 @@ NOTION_PARENT_PAGE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 cp .env.example .env
 ```
 
-2. 填写你的 Notion 配置：
+2. 填写你的数据源配置。默认使用 Notion：
 
 ```env
+DATA_SOURCE=notion
 NOTION_TOKEN=
 NOTION_PARENT_PAGE_ID=
 NOTION_STOCK_DATABASE_ID=
@@ -150,6 +151,46 @@ AUTO_MARKET_SYNC_TIME=16:10
 AUTO_MARKET_SYNC_TIMEZONE=Asia/Shanghai
 AUTO_MARKET_SYNC_STATE_FILE=
 ```
+
+如果要使用 MySQL：
+
+```env
+DATA_SOURCE=mysql
+MYSQL_HOST=10.126.126.10
+MYSQL_PORT=3306
+MYSQL_DATABASE=stock_accumulation_plan
+MYSQL_USER=stock_accumulation_plan_app
+MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+```
+
+MySQL 模式下，`POST /api/init` 会自动创建所需表结构；前端和 REST API 不需要改。
+建库、应用用户授权、备份和恢复脚本见 `docs/mysql-operations.md`。
+
+数据迁移和 JSON 备份：
+
+```bash
+npm --workspace backend run data:migrate:notion-to-mysql
+npm --workspace backend run data:migrate:mysql-to-notion
+EXPORT_SOURCE=mysql npm --workspace backend run data:export
+IMPORT_TARGET=mysql IMPORT_FILE=backups/data-mysql-xxx.json npm --workspace backend run data:import
+```
+
+每日邮件报告可选配置：
+
+```env
+DAILY_EMAIL_REPORT_ENABLED=true
+DAILY_EMAIL_REPORT_TIME=18:00
+DAILY_EMAIL_REPORT_TIMEZONE=Asia/Shanghai
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-account@example.com
+SMTP_PASSWORD=your-smtp-password
+EMAIL_FROM=your-account@example.com
+EMAIL_TO=receiver@example.com
+```
+
+`SMTP_PORT=465` 时通常设置 `SMTP_SECURE=true`；`SMTP_PORT=587` 时通常设置 `SMTP_SECURE=false`，应用会使用 STARTTLS。
 
 3. 安装依赖：
 
@@ -192,6 +233,7 @@ http://localhost:6080
 Docker 部署建议使用：
 
 ```env
+DATA_SOURCE=notion
 NOTION_TOKEN=
 NOTION_PARENT_PAGE_ID=
 NOTION_STOCK_DATABASE_ID=
@@ -207,6 +249,11 @@ AUTO_MARKET_SYNC_ENABLED=true
 AUTO_MARKET_SYNC_TIME=16:10
 AUTO_MARKET_SYNC_TIMEZONE=Asia/Shanghai
 AUTO_MARKET_SYNC_STATE_FILE=
+MYSQL_HOST=10.126.126.10
+MYSQL_PORT=3306
+MYSQL_DATABASE=stock_accumulation_plan
+MYSQL_USER=stock_accumulation_plan_app
+MYSQL_PASSWORD=CHANGE_ME_STRONG_PASSWORD
 ```
 
 2. 执行：
@@ -396,3 +443,39 @@ Notion 的 Internal Integration Token 属于敏感凭据，必须由 Workspace �
 ### Dashboard
 
 - `GET /api/dashboard`
+
+# GitHub Actions 构建与本地部署
+
+代码推送到 `main` 分支后，GitHub Actions 会构建 `linux/amd64` 和 `linux/arm64` 镜像，并推送到：
+
+```text
+ghcr.io/heshixiancn/stock-accumulation-plan:latest
+```
+
+也可以在 GitHub 的 **Actions → Build Docker image → Run workflow** 中手动触发构建。首次使用时，请在仓库的 **Packages** 设置中确认镜像对部署机器可见。
+
+本地服务器更新前，确保项目目录中已有正确的 `.env`。如果 GHCR 镜像是私有的，还需要先登录：
+
+```bash
+echo "YOUR_GITHUB_TOKEN" | docker login ghcr.io -u heshixiancn --password-stdin
+```
+
+然后运行一键部署脚本：
+
+```bash
+./ops/deploy-ghcr.sh
+```
+
+脚本会拉取最新镜像、无本地构建地重建容器、检查 `/health`，并在新容器健康后删除被替换的旧项目镜像。可通过 `APP_IMAGE` 部署指定版本，例如：
+
+```bash
+APP_IMAGE=ghcr.io/heshixiancn/stock-accumulation-plan:sha-abcdef0 ./ops/deploy-ghcr.sh
+```
+
+生产环境的密钥文件也可以放在仓库之外，通过 `APP_ENV_FILE` 在容器启动时注入：
+
+```bash
+APP_ENV_FILE=/etc/stock-accumulation-plan/app.env ./ops/deploy-ghcr.sh
+```
+
+`.env` 和 `.env.*`（`.env.example` 除外）均被 Git 与 Docker 构建上下文忽略。GitHub Actions 构建镜像时不需要、不会读取业务数据库或 Notion 密钥。

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
+import { startDailyEmailReportScheduler } from "./services/daily-email-report-scheduler.js";
 import { startAutomaticMarketSyncScheduler } from "./services/market-sync-scheduler.js";
 import { HttpError } from "./utils/errors.js";
 
@@ -18,7 +19,7 @@ app.use(
     origin: env.CORS_ORIGIN.split(",").map((item) => item.trim()),
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -59,4 +60,5 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 app.listen(env.PORT, () => {
   console.log(`stock-accumulator-notion server running on port ${env.PORT}`);
   startAutomaticMarketSyncScheduler();
+  startDailyEmailReportScheduler();
 });

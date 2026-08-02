@@ -52,7 +52,7 @@ export const tradePayloadSchema = z.object({
   stockCode: textField.min(1, "股票代码不能为空"),
   stockName: textField.min(1, "股票名称不能为空"),
   tradeDate: z.string().trim().min(1, "交易日期不能为空"),
-  tradeType: z.enum(OTHER_INVESTMENT_RECORD_TYPE_OPTIONS),
+  tradeType: z.enum(TRADE_TYPE_OPTIONS),
   price: z.coerce.number().finite().positive("成交价格必须大于 0"),
   shares: z.coerce.number().finite().positive("股数必须大于 0"),
   fee: numberField.default(0),

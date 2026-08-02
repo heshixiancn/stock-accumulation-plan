@@ -7,13 +7,18 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "data:export": "tsx src/scripts/export-data.ts",
+    "data:import": "tsx src/scripts/import-data.ts",
+    "data:migrate:notion-to-mysql": "tsx src/scripts/migrate-notion-to-mysql.ts",
+    "data:migrate:mysql-to-notion": "tsx src/scripts/migrate-mysql-to-notion.ts"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "mysql2": "^3.23.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -24,4 +29,3 @@
     "typescript": "^5.6.3"
   }
 }
-

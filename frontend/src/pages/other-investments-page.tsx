@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { ExternalLink, History, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
+import { ExternalLink, History, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { InvestmentPerformanceCharts } from "../components/charts/investment-performance-charts";
+import { ListInvestmentDashboard } from "../components/charts/list-investment-dashboard";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -18,6 +20,7 @@ import type {
   OtherInvestmentRecord,
   OtherInvestmentRecordType,
 } from "../types";
+import { aggregateDividendHistory, formatHoldingPeriod, getCurrentHoldingSince } from "../lib/investment";
 
 const marketOptions: OtherInvestmentMarket[] = ["A股", "美股", "港股"];
 const assetTypeOptions: OtherInvestmentAssetType[] = ["股票", "基金", "ETF", "可转债", "其他"];
@@ -116,12 +119,22 @@ const formatLedgerPrice = (value: number, currency = "CNY") =>
     maximumFractionDigits: 3,
   }).format(value || 0);
 
+const formatCostPrice = (value: number, currency = "CNY") =>
+  new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 6,
+  }).format(value || 0);
+
 const formatSignedMoney = (value: number, currency = "CNY") => {
   const formatted = formatMoney(Math.abs(value || 0), currency);
   if (value > 0) return `+${formatted}`;
   if (value < 0) return `-${formatted}`;
   return formatted;
 };
+
+const calculateReturnRate = (profitLoss: number, cost: number) => (cost > 0 ? (profitLoss / cost) * 100 : 0);
 
 const formatQuantity = (value: number, market?: OtherInvestmentMarket) =>
   new Intl.NumberFormat("zh-CN", {
@@ -549,6 +562,7 @@ export const OtherInvestmentsPage = ({
   const [ledgerTab, setLedgerTab] = useState("trades");
   const [assetEditPosition, setAssetEditPosition] = useState<OtherInvestmentPosition | null>(null);
   const [actionMessage, setActionMessage] = useState("");
+  const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const positions = data?.positions ?? [];
   const records = data?.records ?? [];
@@ -644,11 +658,34 @@ export const OtherInvestmentsPage = ({
           <h2 className="text-2xl font-semibold tracking-tight">其他投资</h2>
           <p className="text-sm text-muted-foreground">按市场管理蓝筹攒股计划之外的 A 股、美股、港股交易和盈亏。</p>
         </div>
-        <Button onClick={openBlankRecordDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          新增投资记录
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button variant="outline" onClick={() => setDashboardOpen((open) => !open)}>
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            {dashboardOpen ? "收起 Dashboard" : "Dashboard"}
+          </Button>
+          <Button onClick={openBlankRecordDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增投资记录
+          </Button>
+        </div>
       </div>
+
+      {dashboardOpen && (
+        <ListInvestmentDashboard
+          title={`${market}整体投资状况`}
+          currency={filteredPositions[0]?.currency ?? (market === "美股" ? "USD" : market === "港股" ? "HKD" : "CNY")}
+          positions={filteredPositions.map((item) => ({
+            key: positionAssetKey(item),
+            name: item.assetName,
+            currency: item.currency,
+            marketValue: item.marketValue,
+            costBasis: item.costBasis,
+            unrealizedProfitLoss: item.unrealizedProfitLoss,
+            realizedProfitLoss: item.realizedProfitLoss,
+            dividendIncome: item.dividendIncome,
+          }))}
+        />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-white/75">
         <div className="border-b border-border/60 bg-white/85 p-4">
@@ -683,26 +720,26 @@ export const OtherInvestmentsPage = ({
           {actionMessage ? <div className="mt-3 rounded-2xl bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">{actionMessage}</div> : null}
         </div>
 
-            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.05fr_0.8fr_0.85fr_0.95fr_1.05fr_1.1fr_96px_104px] lg:items-center lg:gap-4">
+            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.1fr_0.7fr_1fr_0.75fr_1.1fr_1fr_1fr_96px_104px] lg:items-center lg:gap-4">
               <div>标的</div>
               <div>类型</div>
-              <div>现价 / 成本</div>
+              <div>现价 / 持仓均价</div>
               <div>持仓</div>
-              <div>持仓市值</div>
-              <div>盈亏</div>
+              <div>持仓市值 / 成本</div>
+              <div>持仓盈亏</div>
+              <div>历史盈亏</div>
               <div>状态</div>
               <div className="text-right">操作</div>
             </div>
 
             <div className="divide-y divide-border/60">
               {filteredPositions.map((item) => {
-                const positionRecords = recordsByAssetKey.get(positionAssetKey(item)) ?? [];
                 const quoteUrl = getMarketQuoteUrl(item);
 
                 return (
                   <div
                     key={positionAssetKey(item)}
-                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.05fr_0.8fr_0.85fr_0.95fr_1.05fr_1.1fr_96px_104px] lg:items-center lg:gap-4"
+                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.1fr_0.7fr_1fr_0.75fr_1.1fr_1fr_1fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
                       <a
@@ -715,7 +752,7 @@ export const OtherInvestmentsPage = ({
                         <span className="truncate">{item.assetName}</span>
                         <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
                       </a>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                         {item.assetCode ? (
                           <a
                             className="transition-colors hover:text-primary hover:underline"
@@ -729,8 +766,7 @@ export const OtherInvestmentsPage = ({
                         ) : (
                           <span>-</span>
                         )}
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{item.currency}</span>
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{positionRecords.length} 笔流水</span>
+                        <span>{item.currency}</span>
                       </div>
                     </div>
 
@@ -742,33 +778,51 @@ export const OtherInvestmentsPage = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-xs text-muted-foreground lg:hidden">现价 / 成本</div>
-                      <div className="font-medium">{formatLedgerPrice(item.currentPrice, item.currency)}</div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">成本 {formatLedgerPrice(item.costPrice, item.currency)}</div>
+                      <div className="text-sm lg:hidden">现价 / 持仓均价</div>
+                      <div>
+                        <div className="font-semibold">{formatLedgerPrice(item.currentPrice, item.currency)}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">成本 {formatCostPrice(item.costPrice, item.currency)}</div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
                       <div className="text-xs text-muted-foreground lg:hidden">持仓</div>
                       <div className="font-medium">{formatQuantity(item.holdingQuantity, item.market)}</div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">最新 {item.latestTradeDate ?? "-"}</div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-xs text-muted-foreground lg:hidden">持仓市值</div>
-                      <div className="font-medium">{formatMoney(item.marketValue, item.currency)}</div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">成本 {formatMoney(item.costBasis, item.currency)}</div>
+                      <div className="text-sm lg:hidden">持仓市值 / 成本</div>
+                      <div>
+                        <div className="font-semibold">{formatMoney(item.marketValue, item.currency)}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">成本 {formatMoney(item.costBasis, item.currency)}</div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-xs text-muted-foreground lg:hidden">盈亏</div>
-                      <div className={cn("font-medium", profitToneClass(item.unrealizedProfitLoss))}>
-                        持仓 {formatSignedMoney(item.unrealizedProfitLoss, item.currency)}
+                      <div className="text-sm lg:hidden">持仓盈亏</div>
+                      <div>
+                        <div className={cn("font-semibold", profitToneClass(item.unrealizedProfitLoss))}>
+                          {formatSignedMoney(item.unrealizedProfitLoss, item.currency)}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          收益率 <span className={profitToneClass(item.unrealizedProfitLossRate)}>{formatPercent(item.unrealizedProfitLossRate)}</span>
+                        </div>
                       </div>
-                      <div className={cn("text-xs lg:mt-1", profitToneClass(item.totalProfitLoss))}>
-                        总计 {formatSignedMoney(item.totalProfitLoss, item.currency)}
-                      </div>
-                      <div className="text-xs text-muted-foreground lg:mt-1">
-                        收益率 {formatPercent(item.totalProfitLossRate)}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 lg:block">
+                      <div className="text-sm lg:hidden">历史盈亏</div>
+                      <div>
+                        <div className={cn("font-semibold", profitToneClass(item.realizedProfitLoss))}>
+                          {formatSignedMoney(item.realizedProfitLoss, item.currency)}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          收益率 <span className={profitToneClass(item.realizedProfitLoss)}>{formatPercent(calculateReturnRate(item.realizedProfitLoss,
+                            (recordsByAssetKey.get(positionAssetKey(item)) ?? [])
+                              .filter((record) => record.tradeType === "买入")
+                              .reduce((sum, record) => sum + record.price * record.quantity + record.fee + record.tax, 0) - item.costBasis,
+                          ))}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -881,13 +935,40 @@ export const OtherInvestmentsPage = ({
       />
 
       <Dialog open={!!ledgerPosition} onOpenChange={(open) => !open && setLedgerPosition(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>
-              {ledgerPosition?.assetName} {ledgerPosition?.assetCode ? `(${ledgerPosition.assetCode})` : ""} 流水
+              {ledgerPosition?.assetName} {ledgerPosition?.assetCode ? `(${ledgerPosition.assetCode})` : ""} 投资详情
             </DialogTitle>
-            <DialogDescription>查看该标的的买入、卖出和分红记录。新增记录可在列表点击“记一笔”。</DialogDescription>
+            <DialogDescription>查看当前投资、收益概况及对应的买入、卖出和分红明细。</DialogDescription>
           </DialogHeader>
+          {ledgerPosition ? (
+            <InvestmentPerformanceCharts
+              holdingPeriod={formatHoldingPeriod(
+                getCurrentHoldingSince(ledgerTradeRecords.map((item) => ({
+                  date: item.tradeDate,
+                  type: item.tradeType === "买入" ? "buy" : "sell",
+                  quantity: item.quantity,
+                  createdAt: item.createdAt,
+                }))),
+                ledgerPosition.holdingQuantity,
+              )}
+              holdingQuantity={formatQuantity(ledgerPosition.holdingQuantity, ledgerPosition.market)}
+              costPrice={formatCostPrice(ledgerPosition.costPrice, ledgerPosition.currency)}
+              currentPrice={formatLedgerPrice(ledgerPosition.currentPrice, ledgerPosition.currency)}
+              costBasis={ledgerPosition.costBasis}
+              marketValue={ledgerPosition.marketValue}
+              unrealizedProfitLoss={ledgerPosition.unrealizedProfitLoss}
+              realizedProfitLoss={ledgerPosition.realizedProfitLoss}
+              dividendIncome={ledgerPosition.dividendIncome}
+              totalProfitLoss={ledgerPosition.totalProfitLoss}
+              dividendHistory={aggregateDividendHistory(ledgerDividendRecords.map((item) => ({
+                year: item.tradeDate,
+                value: item.price * item.quantity - item.fee - item.tax,
+              })))}
+              formatValue={(value) => formatMoney(value, ledgerPosition.currency)}
+            />
+          ) : null}
           <Tabs
             value={ledgerTab}
             onChange={setLedgerTab}
@@ -897,7 +978,7 @@ export const OtherInvestmentsPage = ({
             ]}
           />
 
-          <div className="mt-4 max-h-[72vh] overflow-y-auto pr-1">
+          <div className="mt-4 max-h-[45vh] overflow-y-auto pr-1">
             {ledgerTab === "trades" ? (
               <div className="space-y-2">
                 {ledgerTradeRecords.map((item) => (

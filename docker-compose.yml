@@ -6,13 +6,12 @@ services:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     container_name: stock-accumulator-notion
     env_file:
-      - .env
+      - ${APP_ENV_FILE:-.env}
     ports:
       - "${HOST_PORT:-6080}:3000"
     environment:
       # Keep the container port stable. Change HOST_PORT in .env for host access.
       PORT: 3000
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:6080}
       APP_CONFIG_FILE: /app/data/.env
     volumes:
       - ./data:/app/data

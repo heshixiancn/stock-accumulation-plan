@@ -117,6 +117,7 @@ export interface OtherInvestmentAsset {
   unrealizedProfitLoss: number;
   unrealizedProfitLossRate: number;
   realizedProfitLoss: number;
+  dividendIncome: number;
   totalProfitLoss: number;
   totalProfitLossRate: number;
   isClosed: boolean;
@@ -135,6 +136,7 @@ export interface OtherInvestmentSummary {
   totalCostBasis: number;
   totalUnrealizedProfitLoss: number;
   totalRealizedProfitLoss: number;
+  totalDividendIncome: number;
   totalProfitLoss: number;
   positionCount: number;
   openPositionCount: number;
@@ -150,6 +152,7 @@ export interface OtherInvestmentSummary {
     costBasis: number;
     unrealizedProfitLoss: number;
     realizedProfitLoss: number;
+    dividendIncome: number;
     totalProfitLoss: number;
     positionCount: number;
   }>;
