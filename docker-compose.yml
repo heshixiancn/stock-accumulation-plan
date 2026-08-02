@@ -6,26 +6,13 @@ services:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     container_name: stock-accumulator-notion
     env_file:
-      - .env
+      - ${APP_ENV_FILE:-.env}
     ports:
       - "${HOST_PORT:-6080}:3000"
     environment:
       # Keep the container port stable. Change HOST_PORT in .env for host access.
       PORT: 3000
-      DATA_SOURCE: ${DATA_SOURCE:-notion}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:6080}
       APP_CONFIG_FILE: /app/data/.env
-      DAILY_EMAIL_REPORT_ENABLED: ${DAILY_EMAIL_REPORT_ENABLED:-false}
-      DAILY_EMAIL_REPORT_TIME: ${DAILY_EMAIL_REPORT_TIME:-18:00}
-      DAILY_EMAIL_REPORT_TIMEZONE: ${DAILY_EMAIL_REPORT_TIMEZONE:-Asia/Shanghai}
-      DAILY_EMAIL_REPORT_STATE_FILE: ${DAILY_EMAIL_REPORT_STATE_FILE:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-}
-      EMAIL_TO: ${EMAIL_TO:-}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

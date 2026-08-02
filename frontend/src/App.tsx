@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ArrowLeft, Settings } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings } from "lucide-react";
 import { AppShell } from "./components/layout/app-shell";
 import { Card, CardContent } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { Tabs } from "./components/ui/tabs";
 import { api } from "./api/client";
-import { useDashboard } from "./hooks/use-dashboard";
 import { useDividends } from "./hooks/use-dividends";
 import { useOtherInvestments } from "./hooks/use-other-investments";
 import { useStocks } from "./hooks/use-stocks";
 import { useTrades } from "./hooks/use-trades";
 import "./index.css";
-import { DashboardPage } from "./pages/dashboard-page";
 import { OtherInvestmentsPage } from "./pages/other-investments-page";
 import { SetupPage } from "./pages/setup-page";
 import { SettingsPage } from "./pages/settings-page";
@@ -21,12 +19,13 @@ import { StocksPage } from "./pages/stocks-page";
 const queryClient = new QueryClient();
 
 const ConfiguredApp = () => {
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState("stocks");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [initMessage, setInitMessage] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const dashboard = useDashboard(isInitialized);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState("");
   const stocks = useStocks(isInitialized);
   const dividends = useDividends(isInitialized);
   const trades = useTrades(isInitialized);
@@ -40,7 +39,6 @@ const ConfiguredApp = () => {
       const response = await api.init();
       setIsInitialized(true);
       await Promise.all([
-        dashboard.refetch(),
         stocks.query.refetch(),
         dividends.query.refetch(),
         trades.query.refetch(),
@@ -60,6 +58,30 @@ const ConfiguredApp = () => {
     void initializeDatabases();
   }, []);
 
+  const refreshCurrentPage = async () => {
+    setIsRefreshing(true);
+    setRefreshMessage("");
+
+    try {
+      if (tab === "stocks") {
+        await Promise.all([
+          stocks.query.refetch({ throwOnError: true }),
+          trades.query.refetch({ throwOnError: true }),
+          dividends.query.refetch({ throwOnError: true }),
+        ]);
+      } else {
+        await otherInvestments.query.refetch({ throwOnError: true });
+      }
+
+      const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      setRefreshMessage(`数据已刷新（${time}）`);
+    } catch (error) {
+      setRefreshMessage(error instanceof Error ? `刷新失败：${error.message}` : "刷新数据失败");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -70,20 +92,31 @@ const ConfiguredApp = () => {
             setSettingsOpen(false);
           }}
           items={[
-            { label: "总览", value: "dashboard" },
             { label: "攒股计划", value: "stocks" },
             { label: "其他投资", value: "other-investments" },
           ]}
         />
-        <Button
-          className="w-full sm:w-auto"
-          variant={settingsOpen ? "secondary" : "outline"}
-          onClick={() => setSettingsOpen((open) => !open)}
-        >
-          {settingsOpen ? <ArrowLeft className="mr-2 h-4 w-4" /> : <Settings className="mr-2 h-4 w-4" />}
-          {settingsOpen ? "返回" : "设置"}
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          {!settingsOpen && (
+            <Button className="flex-1 sm:flex-none" variant="outline" disabled={isRefreshing} onClick={() => void refreshCurrentPage()}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              {isRefreshing ? "查询中" : "刷新数据"}
+            </Button>
+          )}
+          <Button
+            className="flex-1 sm:flex-none"
+            variant={settingsOpen ? "secondary" : "outline"}
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            {settingsOpen ? <ArrowLeft className="mr-2 h-4 w-4" /> : <Settings className="mr-2 h-4 w-4" />}
+            {settingsOpen ? "返回" : "设置"}
+          </Button>
+        </div>
       </div>
+
+      {!settingsOpen && refreshMessage && (
+        <div className="mb-4 rounded-2xl bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">{refreshMessage}</div>
+      )}
 
       {settingsOpen && (
         <SettingsPage
@@ -92,7 +125,6 @@ const ConfiguredApp = () => {
           onInitialize={() => void initializeDatabases(true)}
         />
       )}
-      {!settingsOpen && tab === "dashboard" && dashboard.data && <DashboardPage data={dashboard.data} />}
       {!settingsOpen && tab === "stocks" && (
         <StocksPage
           stocks={stocks.query.data ?? []}

@@ -49,6 +49,8 @@ export interface TradeRecord {
   fee: number;
   tax: number;
   notes: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MarketQuote {
@@ -133,6 +135,8 @@ export interface OtherInvestmentRecord {
   currentPrice: number;
   currency: OtherInvestmentCurrency;
   notes: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface OtherInvestmentAsset {

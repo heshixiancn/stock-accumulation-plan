@@ -59,13 +59,13 @@ const fetchWithRetry = async (url: string, init: RequestInit, label: string) => 
 
 const getEastMoneySecId = (stockCode: string) => {
   const normalized = stockCode.trim();
-  if (/^(5|6|9)/.test(normalized)) return `1.${normalized}`;
+  if (/^(5|6|9|11)/.test(normalized)) return `1.${normalized}`;
   return `0.${normalized}`;
 };
 
 const getSinaSymbol = (stockCode: string) => {
   const normalized = stockCode.trim();
-  if (/^(5|6|9)/.test(normalized)) return `sh${normalized}`;
+  if (/^(5|6|9|11)/.test(normalized)) return `sh${normalized}`;
   return `sz${normalized}`;
 };
 
@@ -497,6 +497,61 @@ const fetchEastMoneyGlobalQuote = async (target: AssetMarketTarget): Promise<Ass
   );
 };
 
+const getTencentGlobalSymbol = (target: AssetMarketTarget) => {
+  const code = target.assetCode.trim().replace(/\.HK$/i, "").replace(/\.US$/i, "");
+  if (!code) {
+    throw new HttpError(400, `${target.assetName || "标的"} 缺少资产代码，无法同步行情。`);
+  }
+
+  if (target.market === "港股") return `r_hk${code.padStart(5, "0")}`;
+  if (target.market === "美股") return `us${code.toUpperCase()}`;
+  throw new HttpError(400, `暂不支持同步 ${target.market} 的腾讯全球行情。`);
+};
+
+const normalizeTencentDate = (value?: string) => {
+  if (!value) return undefined;
+  const match = value.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : undefined;
+};
+
+const fetchTencentGlobalQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
+  const symbol = getTencentGlobalSymbol(target);
+  const response = await fetchWithRetry(
+    `https://qt.gtimg.cn/q=${symbol}`,
+    {
+      headers: {
+        Referer: "https://gu.qq.com/",
+        "User-Agent": "Mozilla/5.0 stock-accumulator-notion/1.0",
+      },
+    },
+    "tencent global quote",
+  );
+
+  if (!response.ok) {
+    throw new HttpError(502, `行情接口请求失败：${target.assetName || target.assetCode}（${symbol}）`, `HTTP ${response.status}`);
+  }
+
+  const text = decodeQuoteResponse(await response.arrayBuffer());
+  const match = text.match(/="([^"]*)"/);
+  const fields = match?.[1]?.split("~") ?? [];
+  const currentPrice = Number(fields[3] ?? 0);
+  const previousClose = Number(fields[4] ?? 0);
+  const price = currentPrice > 0 ? currentPrice : previousClose;
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new HttpError(502, `未获取到 ${target.assetName || target.assetCode}（${symbol}）的有效腾讯行情。`);
+  }
+
+  return {
+    assetCode: target.assetCode,
+    assetName: fields[1] || target.assetName,
+    market: target.market,
+    currentPrice: roundTo(price, 4),
+    provider: currentPrice > 0 ? "tencent-global-quote" : "tencent-global-previous-close",
+    updatedAt: normalizeTencentDate(fields[30]),
+  };
+};
+
 export const fetchAssetMarketQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
   if (target.market === "A股") {
     const quote = await fetchStockMarketQuote(toStockPlanTarget(target));
@@ -512,6 +567,12 @@ export const fetchAssetMarketQuote = async (target: AssetMarketTarget): Promise<
 
   if (target.market === "美股" || target.market === "港股") {
     const errors: string[] = [];
+    try {
+      return await fetchTencentGlobalQuote(target);
+    } catch (error) {
+      errors.push(`腾讯：${getErrorMessage(error)}`);
+    }
+
     try {
       return await fetchYahooDailyCloseQuote(target);
     } catch (error) {

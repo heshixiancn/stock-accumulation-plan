@@ -3,6 +3,8 @@ dist
 build
 .DS_Store
 .env
+.env.*
+!.env.example
 backend/dist
 frontend/dist
 data
