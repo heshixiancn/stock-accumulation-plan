@@ -39,6 +39,7 @@ const envSchema = z.object({
   NOTION_TRADE_DATABASE_ID: z.string().optional().default(""),
   NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID: z.string().optional().default(""),
   NOTION_OTHER_INVESTMENT_DATABASE_ID: z.string().optional().default(""),
+  NOTION_NEW_ISSUE_DATABASE_ID: z.string().optional().default(""),
   PORT: z.coerce.number().int().positive().default(3000),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   APP_CONFIG_FILE: z.string().optional(),
@@ -114,6 +115,7 @@ export const requireNotionConfig = () => {
     tradeDatabaseId: env.NOTION_TRADE_DATABASE_ID,
     otherInvestmentAssetDatabaseId: env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID,
     otherInvestmentDatabaseId: env.NOTION_OTHER_INVESTMENT_DATABASE_ID,
+    newIssueDatabaseId: env.NOTION_NEW_ISSUE_DATABASE_ID,
   };
 };
 
@@ -127,6 +129,7 @@ export const saveNotionConfig = (config: {
   tradeDatabaseId?: string;
   otherInvestmentAssetDatabaseId?: string;
   otherInvestmentDatabaseId?: string;
+  newIssueDatabaseId?: string;
 }) => {
   const updates = {
     ...(config.notionToken !== undefined ? { NOTION_TOKEN: stringifyEnvValue(config.notionToken) } : {}),
@@ -147,6 +150,9 @@ export const saveNotionConfig = (config: {
       : {}),
     ...(config.otherInvestmentDatabaseId !== undefined
       ? { NOTION_OTHER_INVESTMENT_DATABASE_ID: stringifyEnvValue(config.otherInvestmentDatabaseId) }
+      : {}),
+    ...(config.newIssueDatabaseId !== undefined
+      ? { NOTION_NEW_ISSUE_DATABASE_ID: stringifyEnvValue(config.newIssueDatabaseId) }
       : {}),
   } satisfies Record<string, string>;
 
@@ -193,6 +199,9 @@ export const saveNotionConfig = (config: {
   }
   if (updates.NOTION_OTHER_INVESTMENT_DATABASE_ID !== undefined) {
     process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = updates.NOTION_OTHER_INVESTMENT_DATABASE_ID;
+  }
+  if (updates.NOTION_NEW_ISSUE_DATABASE_ID !== undefined) {
+    process.env.NOTION_NEW_ISSUE_DATABASE_ID = updates.NOTION_NEW_ISSUE_DATABASE_ID;
   }
 };
 
@@ -253,6 +262,7 @@ export const clearNotionDatabaseConfig = () => {
     tradeDatabaseId: "",
     otherInvestmentAssetDatabaseId: "",
     otherInvestmentDatabaseId: "",
+    newIssueDatabaseId: "",
   });
 };
 

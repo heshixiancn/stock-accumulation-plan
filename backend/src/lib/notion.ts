@@ -13,6 +13,7 @@ import type {
 import { clearNotionDatabaseConfig, requireNotionConfig, saveNotionConfig } from "../config/env.js";
 import {
   DIVIDEND_DATABASE_TITLE,
+  NEW_ISSUE_DATABASE_TITLE,
   OTHER_INVESTMENT_ASSET_DATABASE_TITLE,
   OTHER_INVESTMENT_DATABASE_TITLE,
   STOCK_DATABASE_TITLE,
@@ -21,6 +22,7 @@ import {
 import {
   dividendDatabaseProperties,
   isDatabaseTitleMatch,
+  newIssueDatabaseProperties,
   otherInvestmentAssetDatabaseProperties,
   otherInvestmentDatabaseProperties,
   stockDatabaseProperties,
@@ -34,6 +36,7 @@ export interface ManagedDatabases {
   tradeDbId: string;
   otherInvestmentAssetDbId: string;
   otherInvestmentDbId: string;
+  newIssueDbId: string;
 }
 
 const getNotionClient = () => {
@@ -112,8 +115,9 @@ const getConfigKey = () => {
     tradeDatabaseId,
     otherInvestmentAssetDatabaseId,
     otherInvestmentDatabaseId,
+    newIssueDatabaseId,
   } = requireNotionConfig();
-  return `${parentPageId}:${stockDatabaseId}:${dividendDatabaseId}:${tradeDatabaseId}:${otherInvestmentAssetDatabaseId}:${otherInvestmentDatabaseId}`;
+  return `${parentPageId}:${stockDatabaseId}:${dividendDatabaseId}:${tradeDatabaseId}:${otherInvestmentAssetDatabaseId}:${otherInvestmentDatabaseId}:${newIssueDatabaseId}`;
 };
 
 const isChildDatabaseBlock = (
@@ -237,8 +241,16 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
     tradeDatabaseId,
     otherInvestmentAssetDatabaseId,
     otherInvestmentDatabaseId,
+    newIssueDatabaseId,
   } = requireNotionConfig();
-  if (stockDatabaseId || dividendDatabaseId || tradeDatabaseId || otherInvestmentAssetDatabaseId || otherInvestmentDatabaseId) {
+  if (
+    stockDatabaseId ||
+    dividendDatabaseId ||
+    tradeDatabaseId ||
+    otherInvestmentAssetDatabaseId ||
+    otherInvestmentDatabaseId ||
+    newIssueDatabaseId
+  ) {
     cachedDatabases = null;
     cachedConfigKey = "";
     clearNotionDatabaseConfig();
@@ -268,6 +280,9 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
   const otherInvestmentExisting =
     childDatabases.find((database) => database.title === OTHER_INVESTMENT_DATABASE_TITLE) ??
     (await searchParentDatabaseByTitle(OTHER_INVESTMENT_DATABASE_TITLE));
+  const newIssueExisting =
+    childDatabases.find((database) => database.title === NEW_ISSUE_DATABASE_TITLE) ??
+    (await searchParentDatabaseByTitle(NEW_ISSUE_DATABASE_TITLE));
 
   const stockDbId = stockExisting?.id ?? (await createDatabase(STOCK_DATABASE_TITLE, stockDatabaseProperties));
   const dividendDbId =
@@ -279,6 +294,8 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
   const otherInvestmentDbId =
     otherInvestmentExisting?.id ??
     (await createDatabase(OTHER_INVESTMENT_DATABASE_TITLE, otherInvestmentDatabaseProperties));
+  const newIssueDbId =
+    newIssueExisting?.id ?? (await createDatabase(NEW_ISSUE_DATABASE_TITLE, newIssueDatabaseProperties));
 
   const databases = {
     stockDbId,
@@ -286,6 +303,7 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
     tradeDbId,
     otherInvestmentAssetDbId,
     otherInvestmentDbId,
+    newIssueDbId,
   };
 
   saveNotionConfig({
@@ -294,6 +312,7 @@ const ensureDatabasesOnce = async (): Promise<ManagedDatabases> => {
     tradeDatabaseId: tradeDbId,
     otherInvestmentAssetDatabaseId: otherInvestmentAssetDbId,
     otherInvestmentDatabaseId: otherInvestmentDbId,
+    newIssueDatabaseId: newIssueDbId,
   });
 
   return databases;

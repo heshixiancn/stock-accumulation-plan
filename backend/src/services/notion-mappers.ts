@@ -7,6 +7,10 @@ import type {
   OtherInvestmentMarket,
   OtherInvestmentRecordType,
   OtherInvestmentRecord,
+  NewIssueMarket,
+  NewIssueRecord,
+  NewIssueStatus,
+  NewIssueType,
   StockPlan,
   StockStatus,
   TradeRecord,
@@ -14,6 +18,7 @@ import type {
 } from "../types/domain.js";
 import { getEffectiveDividendPerShare } from "../utils/dividend.js";
 import { percentage, roundTo } from "../utils/math.js";
+import { calculateNewIssueMetrics } from "./validation.js";
 
 const readTitle = (page: PageObjectResponse, propertyName: string): string => {
   const property = page.properties[propertyName];
@@ -132,6 +137,47 @@ export const mapDividendPage = (page: PageObjectResponse): DividendRecord => {
     holdingShares,
     grossDividend,
     netDividend: readNumber(page, "税后股息"),
+    notes: readRichText(page, "备注"),
+    createdAt: page.created_time,
+    updatedAt: page.last_edited_time,
+  };
+};
+
+export const mapNewIssuePage = (page: PageObjectResponse): NewIssueRecord => {
+  const market = (readSelect(page, "市场") || "A股") as NewIssueMarket;
+  const status = (readSelect(page, "状态") || "申购中") as NewIssueStatus;
+  const allottedQuantity = readNumber(page, "中签数量");
+  const issuePrice = readNumber(page, "发行价");
+  const salePrice = readNumber(page, "卖出价");
+  const fees = readNumber(page, "手续费");
+  const financingInterest = readNumber(page, "融资利息");
+
+  return {
+    id: page.id,
+    title: readTitle(page, "记录标题"),
+    securityCode: readRichText(page, "证券代码"),
+    securityName: readRichText(page, "证券名称"),
+    market,
+    issueType: (readSelect(page, "打新类型") || "新股") as NewIssueType,
+    status,
+    subscriptionDate: readDate(page, "申购日期"),
+    listingDate: readDate(page, "上市日期"),
+    saleDate: readDate(page, "卖出日期"),
+    subscribedQuantity: readNumber(page, "申购数量"),
+    allottedQuantity,
+    issuePrice,
+    salePrice,
+    fees,
+    financingInterest,
+    currency: market === "港股" ? "HKD" : "CNY",
+    ...calculateNewIssueMetrics({
+      status,
+      allottedQuantity,
+      issuePrice,
+      salePrice,
+      fees,
+      financingInterest,
+    }),
     notes: readRichText(page, "备注"),
     createdAt: page.created_time,
     updatedAt: page.last_edited_time,

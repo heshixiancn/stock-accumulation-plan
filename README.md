@@ -40,6 +40,7 @@ stock-accumulator-notion/
 - `交易记录`
 - `其他投资标的`
 - `其他投资记录`
+- `打新收益记录`
 
 如果已存在，则直接复用；如果不存在，则自动创建。识别方式使用数据库标题名称匹配，保证幂等。
 
@@ -52,6 +53,7 @@ stock-accumulator-notion/
 - `整体进度 = 当前总持仓股数 / 总目标股数`
 - 单只股票进度 = `持仓股数 / 目标股数`
 - `总盈亏 = 当前持仓浮动盈亏 + 卖出已实现盈亏 + 税后股息`
+- `打新净收益 = (卖出价 - 发行价) × 中签数量 - 手续费 - 融资利息`
 
 交易流水按时间升序使用移动加权平均法计算持仓成本。清仓后持仓股数和成本归零，但卖出产生的已实现盈亏会继续保留在 Dashboard 和个股流水中。
 
@@ -76,8 +78,8 @@ stock-accumulator-notion/
 - 向导提供按钮打开 [Notion My Integrations](https://www.notion.so/my-integrations)。
 - 用户创建 Integration Token 后，将 token 粘贴到应用内。
 - 用户在 Notion 创建一个页面，并将页面分享给 Integration 后，将页面链接或页面 ID 粘贴到应用内。
-- 后端验证 token 对该页面有访问权限后，写入运行配置并自动创建五个数据库。
-- 初始化成功后会写入 `NOTION_STOCK_DATABASE_ID`、`NOTION_DIVIDEND_DATABASE_ID`、`NOTION_TRADE_DATABASE_ID`、`NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID` 和 `NOTION_OTHER_INVESTMENT_DATABASE_ID` 作为运行期参考；重新初始化时仍以父页面下固定数据库标题查找为准，避免旧 ID 失效导致重复创建。
+- 后端验证 token 对该页面有访问权限后，写入运行配置并自动创建六个数据库。
+- 初始化成功后会写入 `NOTION_STOCK_DATABASE_ID`、`NOTION_DIVIDEND_DATABASE_ID`、`NOTION_TRADE_DATABASE_ID`、`NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID`、`NOTION_OTHER_INVESTMENT_DATABASE_ID` 和 `NOTION_NEW_ISSUE_DATABASE_ID` 作为运行期参考；重新初始化时仍以父页面下固定数据库标题查找为准，避免旧 ID 失效导致重复创建。
 
 Notion 目前不提供让第三方应用直接生成 Internal Integration Token 的公开 API，因此 token 的创建和复制必须由用户在 Notion 官方页面完成。
 
@@ -144,6 +146,7 @@ NOTION_DIVIDEND_DATABASE_ID=
 NOTION_TRADE_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_DATABASE_ID=
+NOTION_NEW_ISSUE_DATABASE_ID=
 PORT=3000
 CORS_ORIGIN=http://localhost:5173
 AUTO_MARKET_SYNC_ENABLED=true
@@ -241,6 +244,7 @@ NOTION_DIVIDEND_DATABASE_ID=
 NOTION_TRADE_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID=
 NOTION_OTHER_INVESTMENT_DATABASE_ID=
+NOTION_NEW_ISSUE_DATABASE_ID=
 PORT=3000
 HOST_PORT=6080
 CORS_ORIGIN=http://localhost:6080

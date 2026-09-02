@@ -59,7 +59,7 @@ export const SetupPage = ({ onConfigured }: Props) => {
             <div>
               <div className="font-medium text-foreground">自动校验并初始化</div>
               <p className="mt-1 leading-6">
-                提交后，后端会验证 token 是否能访问该页面，写入运行配置，并自动创建“攒股计划”“交易记录”“股息收入记录”“其他投资标的”和“其他投资记录”五个数据库。
+                提交后，后端会验证 token 是否能访问该页面，写入运行配置，并自动创建“攒股计划”“交易记录”“股息收入记录”“其他投资标的”“其他投资记录”和“打新收益记录”六个数据库。
               </p>
             </div>
           </div>

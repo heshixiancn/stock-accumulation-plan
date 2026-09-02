@@ -173,6 +173,60 @@ export const otherInvestmentDatabaseProperties: CreateDatabaseParameters["proper
   备注: { rich_text: {} },
 };
 
+export const newIssueDatabaseProperties: CreateDatabaseParameters["properties"] = {
+  记录标题: { title: {} },
+  证券代码: { rich_text: {} },
+  证券名称: { rich_text: {} },
+  市场: {
+    select: {
+      options: [
+        { name: "A股", color: "red" },
+        { name: "港股", color: "purple" },
+      ],
+    },
+  },
+  打新类型: {
+    select: {
+      options: [
+        { name: "新股", color: "green" },
+        { name: "新债", color: "orange" },
+      ],
+    },
+  },
+  状态: {
+    select: {
+      options: [
+        { name: "申购中", color: "blue" },
+        { name: "未中签", color: "gray" },
+        { name: "持有中", color: "yellow" },
+        { name: "已卖出", color: "green" },
+      ],
+    },
+  },
+  申购日期: { date: {} },
+  上市日期: { date: {} },
+  卖出日期: { date: {} },
+  申购数量: { number: { format: "number" } },
+  中签数量: { number: { format: "number" } },
+  发行价: { number: { format: "number" } },
+  卖出价: { number: { format: "number" } },
+  手续费: { number: { format: "number" } },
+  融资利息: { number: { format: "number" } },
+  币种: {
+    select: {
+      options: [
+        { name: "CNY", color: "red" },
+        { name: "HKD", color: "purple" },
+      ],
+    },
+  },
+  投入金额: { number: { format: "number" } },
+  卖出收入: { number: { format: "number" } },
+  收益: { number: { format: "number" } },
+  收益率: { number: { format: "percent" } },
+  备注: { rich_text: {} },
+};
+
 export const isDatabaseTitleMatch = (titleItems: Array<{ plain_text: string }>, expectedTitle: string) =>
   titleItems.map((item) => item.plain_text).join("").trim() === expectedTitle;
 

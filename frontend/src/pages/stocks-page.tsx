@@ -133,7 +133,7 @@ export const StocksPage = ({
   const [ledgerEntryStock, setLedgerEntryStock] = useState<StockPlan | null>(null);
   const [editingTrade, setEditingTrade] = useState<TradeRecord | null>(null);
   const [editingDividend, setEditingDividend] = useState<DividendRecord | null>(null);
-  const [ledgerStock, setLedgerStock] = useState<StockPlan | null>(null);
+  const [ledgerStockId, setLedgerStockId] = useState<string | null>(null);
   const [ledgerTab, setLedgerTab] = useState("trades");
   const [actionMessage, setActionMessage] = useState("");
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -155,6 +155,10 @@ export const StocksPage = ({
             a.stockCode.localeCompare(b.stockCode),
         ),
     [search, status, stocks],
+  );
+  const ledgerStock = useMemo(
+    () => stocks.find((item) => item.id === ledgerStockId) ?? null,
+    [ledgerStockId, stocks],
   );
 
   const ledgerTrades = useMemo(
@@ -402,7 +406,7 @@ export const StocksPage = ({
                         title="流水"
                         variant="secondary"
                         size="sm"
-                        onClick={() => setLedgerStock(item)}
+                        onClick={() => setLedgerStockId(item.id)}
                       >
                         <History className="h-4 w-4" />
                       </Button>
@@ -491,7 +495,7 @@ export const StocksPage = ({
           setLedgerEntryStock(null);
         }}
       />
-      <Dialog open={!!ledgerStock} onOpenChange={(open) => !open && setLedgerStock(null)}>
+      <Dialog open={!!ledgerStock} onOpenChange={(open) => !open && setLedgerStockId(null)}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>

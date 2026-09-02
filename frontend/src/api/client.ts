@@ -3,6 +3,7 @@ import type {
   DividendRecord,
   EmailReportConfig,
   EmailReportConfigPayload,
+  IpoRecord,
   MarketQuote,
   MarketSyncResult,
   OtherInvestmentMarketSyncResult,
@@ -39,6 +40,10 @@ type StockPayload = Omit<
 >;
 
 type TradePayload = Omit<TradeRecord, "id">;
+type IpoPayload = Omit<
+  IpoRecord,
+  "id" | "investedAmount" | "saleProceeds" | "profitLoss" | "returnRate" | "createdAt" | "updatedAt"
+>;
 type OtherInvestmentPayload = Omit<OtherInvestmentRecord, "id">;
 type OtherInvestmentAssetPayload = Pick<
   OtherInvestmentAsset,
@@ -114,6 +119,12 @@ export const api = {
   updateTrade: (id: string, payload: TradePayload) =>
     request(`/api/trades/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteTrade: (id: string) => request(`/api/trades/${id}`, { method: "DELETE" }),
+  getNewIssues: () => request<IpoRecord[]>("/api/new-issues"),
+  createNewIssue: (payload: IpoPayload) =>
+    request<{ message: string }>("/api/new-issues", { method: "POST", body: JSON.stringify(payload) }),
+  updateNewIssue: (id: string, payload: IpoPayload) =>
+    request<{ message: string }>(`/api/new-issues/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteNewIssue: (id: string) => request<{ message: string }>(`/api/new-issues/${id}`, { method: "DELETE" }),
   getOtherInvestments: () => request<OtherInvestmentOverview>("/api/other-investments"),
   createOtherInvestment: (payload: OtherInvestmentPayload) =>
     request("/api/other-investments", { method: "POST", body: JSON.stringify(payload) }),
