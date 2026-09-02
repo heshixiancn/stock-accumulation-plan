@@ -7,10 +7,12 @@ import { Button } from "./components/ui/button";
 import { Tabs } from "./components/ui/tabs";
 import { api } from "./api/client";
 import { useDividends } from "./hooks/use-dividends";
+import { useNewIssues } from "./hooks/use-new-issues";
 import { useOtherInvestments } from "./hooks/use-other-investments";
 import { useStocks } from "./hooks/use-stocks";
 import { useTrades } from "./hooks/use-trades";
 import "./index.css";
+import { NewIssuesPage } from "./pages/new-issues-page";
 import { OtherInvestmentsPage } from "./pages/other-investments-page";
 import { SetupPage } from "./pages/setup-page";
 import { SettingsPage } from "./pages/settings-page";
@@ -30,6 +32,7 @@ const ConfiguredApp = () => {
   const dividends = useDividends(isInitialized);
   const trades = useTrades(isInitialized);
   const otherInvestments = useOtherInvestments(isInitialized);
+  const newIssues = useNewIssues(isInitialized);
 
   const initializeDatabases = async (manual = false) => {
     setIsInitializing(true);
@@ -43,6 +46,7 @@ const ConfiguredApp = () => {
         dividends.query.refetch(),
         trades.query.refetch(),
         otherInvestments.query.refetch(),
+        newIssues.query.refetch(),
       ]);
       const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
       setInitMessage(`${response.message}（${time}）`);
@@ -61,6 +65,9 @@ const ConfiguredApp = () => {
   const refreshCurrentPage = async () => {
     setIsRefreshing(true);
     setRefreshMessage("");
+    if (tab === "stocks") {
+      trades.clearRefreshError();
+    }
 
     try {
       if (tab === "stocks") {
@@ -69,8 +76,10 @@ const ConfiguredApp = () => {
           trades.query.refetch({ throwOnError: true }),
           dividends.query.refetch({ throwOnError: true }),
         ]);
-      } else {
+      } else if (tab === "other-investments") {
         await otherInvestments.query.refetch({ throwOnError: true });
+      } else {
+        await newIssues.query.refetch({ throwOnError: true });
       }
 
       const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -94,6 +103,7 @@ const ConfiguredApp = () => {
           items={[
             { label: "攒股计划", value: "stocks" },
             { label: "其他投资", value: "other-investments" },
+            { label: "打新收益", value: "new-issues" },
           ]}
         />
         <div className="flex w-full gap-2 sm:w-auto">
@@ -116,6 +126,11 @@ const ConfiguredApp = () => {
 
       {!settingsOpen && refreshMessage && (
         <div className="mb-4 rounded-2xl bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">{refreshMessage}</div>
+      )}
+      {!settingsOpen && tab === "stocks" && trades.refreshError && (
+        <div role="alert" className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {trades.refreshError}
+        </div>
       )}
 
       {settingsOpen && (
@@ -148,12 +163,15 @@ const ConfiguredApp = () => {
             await stocks.deleteMutation.mutateAsync(id);
           }}
           onCreateTrade={async (payload) => {
+            setRefreshMessage("");
             await trades.createMutation.mutateAsync(payload);
           }}
           onUpdateTrade={async (id, payload) => {
+            setRefreshMessage("");
             await trades.updateMutation.mutateAsync({ id, payload });
           }}
           onDeleteTrade={async (id) => {
+            setRefreshMessage("");
             await trades.deleteMutation.mutateAsync(id);
           }}
           onCreateDividend={async (payload) => {
@@ -198,6 +216,25 @@ const ConfiguredApp = () => {
           }}
           onSyncMarkets={async (assets) => {
             return otherInvestments.syncMarketsMutation.mutateAsync(assets);
+          }}
+        />
+      )}
+      {!settingsOpen && tab === "new-issues" && (
+        <NewIssuesPage
+          records={newIssues.query.data ?? []}
+          submitting={
+            newIssues.createMutation.isPending ||
+            newIssues.updateMutation.isPending ||
+            newIssues.deleteMutation.isPending
+          }
+          onCreate={async (payload) => {
+            await newIssues.createMutation.mutateAsync(payload);
+          }}
+          onUpdate={async (id, payload) => {
+            await newIssues.updateMutation.mutateAsync({ id, payload });
+          }}
+          onDelete={async (id) => {
+            await newIssues.deleteMutation.mutateAsync(id);
           }}
         />
       )}

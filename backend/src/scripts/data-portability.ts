@@ -1,5 +1,6 @@
 import type {
   DividendRecord,
+  NewIssueRecord,
   OtherInvestmentAsset,
   OtherInvestmentRecord,
   StockPlan,
@@ -7,6 +8,7 @@ import type {
 } from "../types/domain.js";
 import type {
   DividendPayload,
+  NewIssuePayload,
   OtherInvestmentAssetPayload,
   OtherInvestmentPayload,
   StockPayload,
@@ -19,6 +21,7 @@ import {
   createOtherInvestmentRecord,
   getOtherInvestmentOverview,
 } from "../services/other-investment-service.js";
+import { createNewIssue, listNewIssues } from "../services/new-issue-service.js";
 import { createStock, listStockPlans } from "../services/stock-service.js";
 import { createTrade, listTrades } from "../services/trade-service.js";
 
@@ -30,6 +33,7 @@ export interface PortableData {
   dividends: DividendPayload[];
   otherInvestmentAssets: OtherInvestmentAssetPayload[];
   otherInvestmentRecords: OtherInvestmentPayload[];
+  newIssueRecords?: NewIssuePayload[];
 }
 
 const fallbackDate = () => new Date().toISOString().slice(0, 10);
@@ -102,6 +106,26 @@ const otherRecordPayload = (record: OtherInvestmentRecord): OtherInvestmentPaylo
   notes: record.notes,
 });
 
+const newIssuePayload = (record: NewIssueRecord): NewIssuePayload => ({
+  title: record.title,
+  securityCode: record.securityCode,
+  securityName: record.securityName,
+  market: record.market,
+  issueType: record.issueType,
+  status: record.status,
+  subscriptionDate: record.subscriptionDate ?? record.createdAt?.slice(0, 10) ?? fallbackDate(),
+  listingDate: record.listingDate,
+  saleDate: record.saleDate,
+  subscribedQuantity: record.subscribedQuantity,
+  allottedQuantity: record.allottedQuantity,
+  issuePrice: record.issuePrice,
+  salePrice: record.salePrice,
+  fees: record.fees,
+  financingInterest: record.financingInterest,
+  currency: record.currency,
+  notes: record.notes,
+});
+
 export const exportPortableData = async (source: "notion" | "mysql"): Promise<PortableData> => {
   const previousDataSource = process.env.DATA_SOURCE;
   process.env.DATA_SOURCE = source;
@@ -109,11 +133,12 @@ export const exportPortableData = async (source: "notion" | "mysql"): Promise<Po
   try {
     await initializeDataSource();
 
-    const [stocks, trades, dividends, otherInvestments] = await Promise.all([
+    const [stocks, trades, dividends, otherInvestments, newIssues] = await Promise.all([
       listStockPlans(),
       listTrades(),
       listDividends(),
       getOtherInvestmentOverview(),
+      listNewIssues(),
     ]);
 
     return {
@@ -124,6 +149,7 @@ export const exportPortableData = async (source: "notion" | "mysql"): Promise<Po
       dividends: dividends.map(dividendPayload),
       otherInvestmentAssets: otherInvestments.positions.map(otherAssetPayload),
       otherInvestmentRecords: otherInvestments.records.map(otherRecordPayload),
+      newIssueRecords: newIssues.map(newIssuePayload),
     };
   } finally {
     if (previousDataSource === undefined) {
@@ -141,11 +167,14 @@ export const importPortableData = async (target: "notion" | "mysql", data: Porta
   try {
     await initializeDataSource();
 
+    const newIssueRecords = data.newIssueRecords ?? [];
+
     for (const stock of data.stocks) await createStock(stock);
     for (const trade of data.trades) await createTrade(trade);
     for (const dividend of data.dividends) await createDividend(dividend);
     for (const asset of data.otherInvestmentAssets) await createOtherInvestmentAsset(asset);
     for (const record of data.otherInvestmentRecords) await createOtherInvestmentRecord(record);
+    for (const record of newIssueRecords) await createNewIssue(record);
 
     return {
       stocks: data.stocks.length,
@@ -153,6 +182,7 @@ export const importPortableData = async (target: "notion" | "mysql", data: Porta
       dividends: data.dividends.length,
       otherInvestmentAssets: data.otherInvestmentAssets.length,
       otherInvestmentRecords: data.otherInvestmentRecords.length,
+      newIssueRecords: newIssueRecords.length,
     };
   } finally {
     if (previousDataSource === undefined) {

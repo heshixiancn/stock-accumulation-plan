@@ -4,6 +4,10 @@ export type OtherInvestmentRecordType = TradeType | "分红";
 export type OtherInvestmentMarket = "A股" | "美股" | "港股";
 export type OtherInvestmentAssetType = "股票" | "基金" | "ETF" | "可转债" | "其他";
 export type OtherInvestmentCurrency = "CNY" | "USD" | "HKD";
+export type NewIssueMarket = "A股" | "港股";
+export type NewIssueType = "新股" | "新债";
+export type NewIssueStatus = "申购中" | "未中签" | "持有中" | "已卖出";
+export type NewIssueCurrency = "CNY" | "HKD";
 
 export interface StockPlan {
   id: string;
@@ -77,6 +81,33 @@ export interface DividendRecord {
   holdingShares: number;
   grossDividend: number;
   netDividend: number;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NewIssueRecord {
+  id: string;
+  title: string;
+  securityCode: string;
+  securityName: string;
+  market: NewIssueMarket;
+  issueType: NewIssueType;
+  status: NewIssueStatus;
+  subscriptionDate: string | null;
+  listingDate: string | null;
+  saleDate: string | null;
+  subscribedQuantity: number;
+  allottedQuantity: number;
+  issuePrice: number;
+  salePrice: number;
+  fees: number;
+  financingInterest: number;
+  currency: NewIssueCurrency;
+  investedAmount: number;
+  saleProceeds: number;
+  profitLoss: number;
+  returnRate: number;
   notes: string;
   createdAt?: string;
   updatedAt?: string;

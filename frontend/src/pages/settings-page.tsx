@@ -94,7 +94,7 @@ export const SettingsPage = ({ initMessage, isInitializing, onInitialize }: Sett
   };
 
   const summarizeImported = (imported: Record<string, number>) =>
-    `股票 ${imported.stocks ?? 0}，交易 ${imported.trades ?? 0}，股息 ${imported.dividends ?? 0}，其他标的 ${imported.otherInvestmentAssets ?? 0}，其他流水 ${imported.otherInvestmentRecords ?? 0}`;
+    `股票 ${imported.stocks ?? 0}，交易 ${imported.trades ?? 0}，股息 ${imported.dividends ?? 0}，其他标的 ${imported.otherInvestmentAssets ?? 0}，其他流水 ${imported.otherInvestmentRecords ?? 0}，打新 ${imported.newIssueRecords ?? 0}`;
 
   const exportData = async () => {
     setDataWorking(true);

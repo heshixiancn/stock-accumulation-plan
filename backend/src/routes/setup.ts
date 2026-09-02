@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getEnv, getSetupStatus, saveEmailReportConfig, saveNotionConfig } from "../config/env.js";
 import { ensureDatabases, validateNotionAccess } from "../lib/notion.js";
 import { exportPortableData, importPortableData, type PortableData } from "../scripts/data-portability.js";
+import { newIssuePayloadSchema } from "../services/validation.js";
 
 const setupPayloadSchema = z.object({
   notionToken: z.string().trim().min(1, "NOTION_TOKEN 不能为空"),
@@ -32,6 +33,7 @@ const portableDataSchema = z.object({
   dividends: z.array(z.record(z.unknown())),
   otherInvestmentAssets: z.array(z.record(z.unknown())),
   otherInvestmentRecords: z.array(z.record(z.unknown())),
+  newIssueRecords: z.array(newIssuePayloadSchema).optional().default([]),
 });
 
 export const setupRouter = Router();
@@ -122,6 +124,7 @@ setupRouter.post("/", async (req, res, next) => {
   const previousTradeDatabaseId = process.env.NOTION_TRADE_DATABASE_ID;
   const previousOtherInvestmentAssetDatabaseId = process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID;
   const previousOtherInvestmentDatabaseId = process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID;
+  const previousNewIssueDatabaseId = process.env.NOTION_NEW_ISSUE_DATABASE_ID;
 
   try {
     const payload = setupPayloadSchema.parse(req.body);
@@ -138,6 +141,7 @@ setupRouter.post("/", async (req, res, next) => {
     process.env.NOTION_TRADE_DATABASE_ID = "";
     process.env.NOTION_OTHER_INVESTMENT_ASSET_DATABASE_ID = "";
     process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = "";
+    process.env.NOTION_NEW_ISSUE_DATABASE_ID = "";
 
     const databases = await ensureDatabases();
     saveNotionConfig({
@@ -147,6 +151,7 @@ setupRouter.post("/", async (req, res, next) => {
       tradeDatabaseId: databases.tradeDbId,
       otherInvestmentAssetDatabaseId: databases.otherInvestmentAssetDbId,
       otherInvestmentDatabaseId: databases.otherInvestmentDbId,
+      newIssueDatabaseId: databases.newIssueDbId,
     });
 
     res.json({
@@ -194,6 +199,12 @@ setupRouter.post("/", async (req, res, next) => {
       delete process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID;
     } else {
       process.env.NOTION_OTHER_INVESTMENT_DATABASE_ID = previousOtherInvestmentDatabaseId;
+    }
+
+    if (previousNewIssueDatabaseId === undefined) {
+      delete process.env.NOTION_NEW_ISSUE_DATABASE_ID;
+    } else {
+      process.env.NOTION_NEW_ISSUE_DATABASE_ID = previousNewIssueDatabaseId;
     }
 
     next(error);

@@ -98,3 +98,34 @@ CREATE TABLE IF NOT EXISTS other_investment_records (
   PRIMARY KEY (id),
   KEY idx_other_records_key_date (market, asset_code, asset_name, trade_date)
 ) COMMENT='其他投资流水，用于持仓、成本、分红和盈亏计算';
+
+CREATE TABLE IF NOT EXISTS new_issue_records (
+  id varchar(36) NOT NULL COMMENT '主键，应用生成的 UUID',
+  title varchar(255) NOT NULL COMMENT '打新收益记录标题',
+  security_code varchar(64) NOT NULL COMMENT '证券代码',
+  security_name varchar(255) NOT NULL COMMENT '证券名称',
+  market varchar(16) NOT NULL COMMENT '市场：A股、港股',
+  issue_type varchar(16) NOT NULL COMMENT '打新类型：新股、新债；港股仅支持新股',
+  status varchar(16) NOT NULL COMMENT '状态：申购中、未中签、持有中、已卖出',
+  subscription_date date NOT NULL COMMENT '申购日期',
+  listing_date date NULL COMMENT '上市日期',
+  sale_date date NULL COMMENT '卖出日期',
+  subscribed_quantity decimal(20,4) NOT NULL DEFAULT 0 COMMENT '申购数量',
+  allotted_quantity decimal(20,4) NOT NULL DEFAULT 0 COMMENT '中签或获配数量',
+  issue_price decimal(20,6) NOT NULL DEFAULT 0 COMMENT '发行价格',
+  sale_price decimal(20,6) NOT NULL DEFAULT 0 COMMENT '卖出价格',
+  fees decimal(20,6) NOT NULL DEFAULT 0 COMMENT '申购及交易手续费',
+  financing_interest decimal(20,6) NOT NULL DEFAULT 0 COMMENT '融资申购利息',
+  currency varchar(8) NOT NULL COMMENT '计价币种：A股为 CNY，港股为 HKD',
+  invested_amount decimal(20,6) NOT NULL DEFAULT 0 COMMENT '派生投入金额：发行价乘以中签数量',
+  sale_proceeds decimal(20,6) NOT NULL DEFAULT 0 COMMENT '派生卖出收入：卖出价乘以中签数量',
+  profit_loss decimal(20,6) NOT NULL DEFAULT 0 COMMENT '按状态和费用派生的收益盈亏',
+  return_rate decimal(12,6) NOT NULL DEFAULT 0 COMMENT '收益率，百分数口径，例如 12.34 表示 12.34%',
+  notes text NULL COMMENT '备注',
+  archived tinyint(1) NOT NULL DEFAULT 0 COMMENT '软删除标记，1 表示已归档',
+  created_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_new_issues_market_type_date (market, issue_type, subscription_date),
+  KEY idx_new_issues_status_date (status, sale_date)
+) COMMENT='A股新股、新债及港股新股的打新收益记录';

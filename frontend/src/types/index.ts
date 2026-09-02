@@ -4,6 +4,37 @@ export type OtherInvestmentRecordType = TradeType | "分红";
 export type OtherInvestmentMarket = "A股" | "美股" | "港股";
 export type OtherInvestmentAssetType = "股票" | "基金" | "ETF" | "可转债" | "其他";
 export type OtherInvestmentCurrency = "CNY" | "USD" | "HKD";
+export type IpoMarket = "A股" | "港股";
+export type IpoIssueType = "新股" | "新债";
+export type IpoStatus = "申购中" | "未中签" | "持有中" | "已卖出";
+export type IpoCurrency = "CNY" | "HKD";
+
+export interface IpoRecord {
+  id: string;
+  title: string;
+  securityCode: string;
+  securityName: string;
+  market: IpoMarket;
+  issueType: IpoIssueType;
+  status: IpoStatus;
+  subscriptionDate: string | null;
+  listingDate: string | null;
+  saleDate: string | null;
+  subscribedQuantity: number;
+  allottedQuantity: number;
+  issuePrice: number;
+  salePrice: number;
+  fees: number;
+  financingInterest: number;
+  currency: IpoCurrency;
+  investedAmount: number;
+  saleProceeds: number;
+  profitLoss: number;
+  returnRate: number;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface StockPlan {
   id: string;
