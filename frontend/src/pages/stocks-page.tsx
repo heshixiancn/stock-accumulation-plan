@@ -15,20 +15,17 @@ import {
   formatCostPrice,
   formatCurrency,
   formatNumber,
-  formatPercent,
   formatPrice,
   formatSignedCurrency,
   profitToneClass,
 } from "../lib/utils";
 import type { DividendRecord, MarketSyncResult, StockPlan, StockStatus, TradeRecord } from "../types";
-import { aggregateDividendHistory, formatHoldingPeriod, getCurrentHoldingSince } from "../lib/investment";
+import { aggregateDividendHistory, formatHoldingPeriod, getAdjustedCostPrice, getCurrentHoldingSince } from "../lib/investment";
 
 const statusFilters = ["全部", "观察中", "建仓中", "持有中", "已暂停"] as const;
 
 const getTonghuashunStockUrl = (stockCode: string) =>
   `https://stockpage.10jqka.com.cn/${encodeURIComponent(stockCode.trim())}/`;
-
-const calculateReturnRate = (profitLoss: number, cost: number) => (cost > 0 ? (profitLoss / cost) * 100 : 0);
 
 const getStatusBadge = (stock: StockPlan) => {
   const statusMap: Record<
@@ -267,14 +264,13 @@ export const StocksPage = ({
           ) : null}
 
           <div className="overflow-hidden rounded-2xl border border-border/60 bg-white/75">
-            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.1fr_1.05fr_1fr_1.1fr_1fr_1fr_0.9fr_96px_104px] lg:items-center lg:gap-4">
+            <div className="hidden border-b border-border/60 bg-secondary/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[1.1fr_1.05fr_1fr_1.1fr_0.9fr_1fr_96px_104px] lg:items-center lg:gap-4">
               <div>股票</div>
               <div>进度</div>
-              <div>现价 / 持仓均价</div>
+              <div>现价 / 持仓成本</div>
               <div>持仓市值 / 成本</div>
-              <div>持仓盈亏</div>
-              <div>历史盈亏</div>
-              <div>股息</div>
+              <div>预计股息</div>
+              <div>总盈亏</div>
               <div>状态</div>
               <div className="text-right">操作</div>
             </div>
@@ -282,11 +278,13 @@ export const StocksPage = ({
             <div className="divide-y divide-border/60">
               {filtered.map((item) => {
                 const statusBadge = getStatusBadge(item);
+                const adjustedCostPrice = getAdjustedCostPrice(item);
+                const adjustedHoldingCost = adjustedCostPrice * item.holdingShares;
 
                 return (
                   <div
                     key={item.id}
-                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.1fr_1.05fr_1fr_1.1fr_1fr_1fr_0.9fr_96px_104px] lg:items-center lg:gap-4"
+                    className="grid gap-4 px-4 py-4 text-sm lg:grid-cols-[1.1fr_1.05fr_1fr_1.1fr_0.9fr_1fr_96px_104px] lg:items-center lg:gap-4"
                   >
                     <div className="min-w-0">
                       <a
@@ -323,10 +321,10 @@ export const StocksPage = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-sm lg:hidden">现价 / 持仓均价</div>
+                      <div className="text-sm lg:hidden">现价 / 持仓成本</div>
                       <div>
                         <div className="font-semibold">{formatPrice(item.currentPrice)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">成本 {formatPrice(item.costPrice)}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">持仓成本 {formatPrice(adjustedCostPrice)}</div>
                       </div>
                     </div>
 
@@ -334,44 +332,22 @@ export const StocksPage = ({
                       <div className="text-sm lg:hidden">持仓市值 / 成本</div>
                       <div>
                         <div className="font-semibold">{formatCurrency(item.marketValue)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">成本 {formatCurrency(item.totalHoldingCost)}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">成本 {formatCurrency(adjustedHoldingCost)}</div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-sm lg:hidden">持仓盈亏</div>
-                      <div>
-                        <div className={cn("font-semibold", profitToneClass(item.unrealizedProfitLoss))}>
-                          {formatSignedCurrency(item.unrealizedProfitLoss)}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          收益率 <span className={profitToneClass(item.unrealizedProfitLossRate)}>{formatPercent(item.unrealizedProfitLossRate)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-sm lg:hidden">历史盈亏</div>
-                      <div>
-                        <div className={cn("font-semibold", profitToneClass(item.realizedProfitLoss))}>
-                          {formatSignedCurrency(item.realizedProfitLoss)}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          收益率 <span className={profitToneClass(item.realizedProfitLoss)}>{formatPercent(calculateReturnRate(item.realizedProfitLoss,
-                            trades
-                              .filter((trade) => trade.stockCode.trim() === item.stockCode.trim() && trade.tradeType === "买入")
-                              .reduce((sum, trade) => sum + trade.price * trade.shares + trade.fee + trade.tax, 0) - item.totalHoldingCost,
-                          ))}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1 lg:block">
-                      <div className="text-sm lg:hidden">股息</div>
+                      <div className="text-sm lg:hidden">预计股息</div>
                       <div>
                         <div className="font-semibold">{formatCurrency(item.estimatedDividend)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          历史 <span className="text-red-600">{formatCurrency(item.dividendIncome)}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 lg:block">
+                      <div className="text-sm lg:hidden">总盈亏</div>
+                      <div>
+                        <div className={cn("font-bold", profitToneClass(item.totalProfitLoss))}>
+                          {formatSignedCurrency(item.totalProfitLoss)}
                         </div>
                       </div>
                     </div>

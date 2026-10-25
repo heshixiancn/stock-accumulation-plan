@@ -19,6 +19,8 @@ export const useDividends = (enabled = true) => {
       queryKey: ["dividends"],
       queryFn: api.getDividends,
       enabled,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
     }),
     createMutation: useMutation({
       mutationFn: (payload: DividendPayload) => api.createDividend(payload),

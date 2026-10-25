@@ -104,8 +104,8 @@ const buildQuote = (
   return {
     stockCode: stock.stockCode,
     stockName: stockName || stock.stockName,
-    currentPrice: roundTo(currentPrice),
-    previousClose: previousClose ? roundTo(previousClose) : undefined,
+    currentPrice: roundTo(currentPrice, 6),
+    previousClose: previousClose ? roundTo(previousClose, 6) : undefined,
     dividendYield: roundTo(dividendYield, 6),
     provider,
     updatedAt,
@@ -540,7 +540,7 @@ const fetchEastMoneyGlobalQuote = async (target: AssetMarketTarget): Promise<Ass
           assetCode: target.assetCode,
           assetName: data.data?.f58 || target.assetName,
           market: target.market,
-          currentPrice: roundTo(currentPrice, 4),
+          currentPrice: roundTo(currentPrice, 6),
           provider: "eastmoney-global-quote",
         };
       } catch (error) {
@@ -606,7 +606,7 @@ const fetchTencentGlobalQuote = async (target: AssetMarketTarget): Promise<Asset
     assetCode: target.assetCode,
     assetName: fields[1] || target.assetName,
     market: target.market,
-    currentPrice: roundTo(price, 4),
+    currentPrice: roundTo(price, 6),
     provider: currentPrice > 0 ? "tencent-global-quote" : "tencent-global-previous-close",
     updatedAt: normalizeTencentDate(fields[30]),
   };
@@ -619,7 +619,7 @@ export const fetchAssetMarketQuote = async (target: AssetMarketTarget): Promise<
       assetCode: target.assetCode,
       assetName: quote.stockName || target.assetName,
       market: target.market,
-      currentPrice: roundTo(quote.currentPrice, 4),
+      currentPrice: roundTo(quote.currentPrice, 6),
       provider: quote.provider,
       updatedAt: quote.updatedAt,
     };

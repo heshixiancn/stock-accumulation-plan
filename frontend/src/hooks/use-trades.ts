@@ -35,6 +35,8 @@ export const useTrades = (enabled = true) => {
       queryKey: ["trades"],
       queryFn: api.getTrades,
       enabled,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
     }),
     createMutation: useMutation({
       mutationFn: (payload: TradePayload) => api.createTrade(payload),

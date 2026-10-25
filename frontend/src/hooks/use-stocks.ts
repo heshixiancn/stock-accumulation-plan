@@ -38,6 +38,8 @@ export const useStocks = (enabled = true) => {
       queryKey: ["stocks"],
       queryFn: api.getStocks,
       enabled,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
     }),
     createMutation: useMutation({
       mutationFn: (payload: StockPayload) => api.createStock(payload),

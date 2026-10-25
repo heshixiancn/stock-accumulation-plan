@@ -15,4 +15,9 @@ services:
       APP_CONFIG_FILE: /app/data/.env
     volumes:
       - ./data:/app/data
+    # 容器内行情同步依赖外部域名解析。宿主 DNS 异常时（如路由器 DNS 无响应）
+    # 容器会直接 ENOTFOUND，这里固定使用公共 DNS，避免受宿主配置影响。
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
     restart: unless-stopped

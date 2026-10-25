@@ -74,7 +74,7 @@ export const buildPortfolioPositions = (
     return {
       stockCode: stock?.stockCode || lastTrade?.stockCode || stockDividends[0]?.stockCode || key,
       stockName: stock?.stockName || lastTrade?.stockName || stockDividends[0]?.stockName || key,
-      currentPrice: roundTo(currentPrice),
+      currentPrice: roundTo(currentPrice, 6),
       targetShares: stock?.targetShares ?? 0,
       holdingShares: roundTo(effectiveHoldingShares),
       // Keep enough precision for the displayed unit cost to reconcile with

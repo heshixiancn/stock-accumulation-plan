@@ -35,7 +35,14 @@ export const listStockPlans = async () => {
 
 export const listStocks = async () => {
   const [stocks, trades, dividends] = await Promise.all([listStockPlans(), listTrades(), listDividends()]);
-  return applyPortfolioToStocks(stocks, trades, dividends);
+  return applyPortfolioToStocks(stocks, trades, dividends).map((stock) => {
+    // A recorded buy creates an actual position. Reflect that in the list
+    // even when the legacy stock row still has its original "观察中" status.
+    if (stock.status === "观察中" && stock.holdingShares > 0) {
+      return { ...stock, status: "持有中" as const };
+    }
+    return stock;
+  });
 };
 
 export const createStock = async (payload: StockPayload) => {

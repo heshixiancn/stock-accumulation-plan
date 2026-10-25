@@ -6,4 +6,6 @@ export const useDashboard = (enabled = true) =>
     queryKey: ["dashboard"],
     queryFn: api.getDashboard,
     enabled,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
   });

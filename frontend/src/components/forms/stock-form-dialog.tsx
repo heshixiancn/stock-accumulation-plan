@@ -108,7 +108,7 @@ export const StockFormDialog = ({ open, onOpenChange, initialData, onSubmit, sub
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium">当前价格</span>
-            <Input type="number" step="0.01" {...form.register("currentPrice", { valueAsNumber: true })} />
+            <Input type="number" step="0.000001" {...form.register("currentPrice", { valueAsNumber: true })} />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium">成本价</span>

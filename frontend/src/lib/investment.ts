@@ -37,6 +37,22 @@ export const formatHoldingPeriod = (holdingSince: string | null, holdingQuantity
   return `${holdingSince} · ${days} 天`;
 };
 
+/**
+ * Cost after spreading realized gains and received dividends across the
+ * remaining shares, matching the "摊薄成本" convention used by brokers.
+ */
+export const getAdjustedCostPrice = (values: {
+  holdingShares: number;
+  totalHoldingCost: number;
+  realizedProfitLoss: number;
+  dividendIncome: number;
+}) => {
+  if (values.holdingShares <= 0) return 0;
+  return (
+    values.totalHoldingCost - values.realizedProfitLoss - values.dividendIncome
+  ) / values.holdingShares;
+};
+
 export const aggregateDividendHistory = (items: Array<{ year: string | number | null; value: number }>) => {
   const totals = new Map<string, number>();
   for (const item of items) {
