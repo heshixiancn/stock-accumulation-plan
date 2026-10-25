@@ -13,6 +13,7 @@
     "build": "npm run build --workspace frontend && npm run build --workspace backend",
     "start": "npm --workspace backend run start",
     "start:local": "NODE_ENV=production PORT=6080 npm --workspace backend run start",
+    "test": "npm run test --workspace backend",
     "lint": "npm run lint --workspace frontend && npm run lint --workspace backend"
   },
   "devDependencies": {

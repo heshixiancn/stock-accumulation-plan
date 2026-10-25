@@ -17,6 +17,8 @@ interface ZonedNow {
   minutes: number;
 }
 
+const MARKET_SYNC_RETRY_INTERVAL_MS = 10 * 60 * 1000;
+
 let syncRunning = false;
 let schedulerStarted = false;
 let lastUnconfiguredLogDate = "";
@@ -140,7 +142,15 @@ const checkAutomaticMarketSync = async () => {
   if (now.minutes < parseScheduleMinutes(env.AUTO_MARKET_SYNC_TIME)) return;
 
   const state = readState();
-  if (state.lastRunDate === now.dateKey) return;
+  if (state.lastRunDate === now.dateKey && state.lastStatus === "success") return;
+  if (
+    state.lastRunDate === now.dateKey &&
+    state.lastStatus === "failed" &&
+    state.lastRunAt &&
+    Date.now() - new Date(state.lastRunAt).getTime() < MARKET_SYNC_RETRY_INTERVAL_MS
+  ) {
+    return;
+  }
 
   await runAutomaticMarketSync(now.dateKey);
 };

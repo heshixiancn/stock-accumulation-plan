@@ -20,6 +20,7 @@ import {
   type OtherInvestmentPayload,
 } from "./validation.js";
 import { getDataSource } from "./data-source.js";
+import { HttpError } from "../utils/errors.js";
 import {
   createMysqlOtherInvestmentAsset,
   createMysqlOtherInvestmentRecord as createMysqlOtherInvestmentRecordPage,
@@ -43,6 +44,33 @@ const sortRecordsAsc = (records: OtherInvestmentRecord[]) =>
     const dateCompare = (a.tradeDate ?? "").localeCompare(b.tradeDate ?? "");
     return dateCompare || (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
   });
+
+const validateOtherInvestmentLedger = (records: OtherInvestmentRecord[]) => {
+  const grouped = new Map<string, OtherInvestmentRecord[]>();
+
+  for (const record of records) {
+    const key = assetKey(record);
+    grouped.set(key, [...(grouped.get(key) ?? []), record]);
+  }
+
+  for (const assetRecords of grouped.values()) {
+    let holdingQuantity = 0;
+    for (const record of sortRecordsAsc(assetRecords)) {
+      if (record.tradeType === "买入") {
+        holdingQuantity += record.quantity;
+        continue;
+      }
+      if (record.tradeType === "分红") continue;
+      if (record.quantity > holdingQuantity + 1e-8) {
+        throw new HttpError(
+          400,
+          `卖出数量超过可用持仓：最多可卖 ${holdingQuantity}。请先补录买入流水或修正交易日期。`,
+        );
+      }
+      holdingQuantity -= record.quantity;
+    }
+  }
+};
 
 const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
   const sorted = sortRecordsAsc(records);
@@ -69,10 +97,10 @@ const calculateRecordSummary = (records: OtherInvestmentRecord[]) => {
 
     const averageCost = holdingQuantity > 0 ? costBasis / holdingQuantity : 0;
     const sellQuantity = Math.min(record.quantity, holdingQuantity);
-    const netProceeds = record.price * record.quantity - feeAndTax;
+    const netProceeds = record.price * sellQuantity - feeAndTax;
     realizedProfitLoss += netProceeds - averageCost * sellQuantity;
     costBasis = Math.max(0, costBasis - averageCost * sellQuantity);
-    holdingQuantity = Math.max(0, holdingQuantity - record.quantity);
+    holdingQuantity = Math.max(0, holdingQuantity - sellQuantity);
 
     if (holdingQuantity === 0) {
       costBasis = 0;
@@ -444,6 +472,11 @@ const findOrCreateAssetForPayload = async (payload: OtherInvestmentPayload) => {
 
 export const createOtherInvestmentRecord = async (payload: OtherInvestmentPayload) => {
   const data = normalizeOtherInvestmentPayload(payload);
+  const currentState = await getOtherInvestmentState();
+  validateOtherInvestmentLedger([
+    ...currentState.records,
+    { ...data, id: "__candidate__", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  ]);
   await findOrCreateAssetForPayload(data);
   if (getDataSource() === "mysql") {
     await createMysqlOtherInvestmentRecordPage(data);
@@ -460,6 +493,15 @@ export const updateOtherInvestmentRecordById = async (id: string, payload: Other
   const data = normalizeOtherInvestmentPayload(payload);
   const { records } = await getOtherInvestmentState();
   const existing = records.find((record) => record.id === id);
+  validateOtherInvestmentLedger([
+    ...records.filter((record) => record.id !== id),
+    {
+      ...data,
+      id,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
   await findOrCreateAssetForPayload(data);
   await updateRecordPage(id, data);
   await refreshAssetSummaryByKey(assetKey(data));

@@ -1,6 +1,7 @@
 import type { DividendRecord, StockPlan, TradeRecord } from "../types/domain.js";
 import { getEffectiveDividendPerShare } from "../utils/dividend.js";
 import { percentage, roundTo } from "../utils/math.js";
+import { calculateTradeLedger, sortTradesAsc } from "../utils/trade-ledger.js";
 
 export interface PortfolioPosition {
   stockCode: string;
@@ -21,12 +22,6 @@ export interface PortfolioPosition {
 }
 
 const stockKey = (stockCode: string) => stockCode.trim();
-
-const sortTradesAsc = (trades: TradeRecord[]) =>
-  [...trades].sort((a, b) => {
-    const dateCompare = (a.tradeDate ?? "").localeCompare(b.tradeDate ?? "");
-    return dateCompare || (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
-  });
 
 export const buildPortfolioPositions = (
   stocks: StockPlan[],
@@ -58,32 +53,10 @@ export const buildPortfolioPositions = (
 
   return [...allKeys].map((key) => {
     const stock = stockMap.get(key);
-    const stockTrades = sortTradesAsc(tradesByStock.get(key) ?? []);
+    const stockTrades = tradesByStock.get(key) ?? [];
     const stockDividends = dividendsByStock.get(key) ?? [];
-    const lastTrade = stockTrades.at(-1);
-    let holdingShares = 0;
-    let costBasis = 0;
-    let realizedProfitLoss = 0;
-
-    for (const trade of stockTrades) {
-      const feeAndTax = trade.fee + trade.tax;
-
-      if (trade.tradeType === "买入") {
-        holdingShares += trade.shares;
-        costBasis += trade.price * trade.shares + feeAndTax;
-        continue;
-      }
-
-      const averageCost = holdingShares > 0 ? costBasis / holdingShares : 0;
-      const netProceeds = trade.price * trade.shares - feeAndTax;
-      realizedProfitLoss += netProceeds - averageCost * trade.shares;
-      costBasis = Math.max(0, costBasis - averageCost * trade.shares);
-      holdingShares = Math.max(0, holdingShares - trade.shares);
-
-      if (holdingShares === 0) {
-        costBasis = 0;
-      }
-    }
+    const lastTrade = sortTradesAsc(stockTrades).at(-1);
+    const { holdingShares, costBasis, realizedProfitLoss } = calculateTradeLedger(stockTrades);
 
     const hasTradeLedger = stockTrades.length > 0;
     const currentPrice = stock?.currentPrice || lastTrade?.price || 0;

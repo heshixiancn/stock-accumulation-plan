@@ -93,6 +93,7 @@ export const LedgerEntryDialog = ({
   submitting,
 }: Props) => {
   const [entryType, setEntryType] = useState<EntryType>("买入");
+  const [errorMessage, setErrorMessage] = useState("");
   const tradeForm = useForm<TradeFormValues>({ defaultValues: emptyTradeValues });
   const dividendForm = useForm<DividendFormValues>({ defaultValues: emptyDividendValues });
   const isEditing = Boolean(initialTrade || initialDividend);
@@ -100,6 +101,7 @@ export const LedgerEntryDialog = ({
 
   useEffect(() => {
     if (!open) return;
+    setErrorMessage("");
 
     if (initialDividend) {
       setEntryType("分红");
@@ -165,12 +167,17 @@ export const LedgerEntryDialog = ({
           <form
             className="grid gap-4 md:grid-cols-2"
             onSubmit={dividendForm.handleSubmit(async (values) => {
-              if (initialDividend && onUpdateDividend) {
-                await onUpdateDividend(initialDividend.id, values);
-              } else {
-                await onCreateDividend(values);
+              setErrorMessage("");
+              try {
+                if (initialDividend && onUpdateDividend) {
+                  await onUpdateDividend(initialDividend.id, values);
+                } else {
+                  await onCreateDividend(values);
+                }
+                onOpenChange(false);
+              } catch (error) {
+                setErrorMessage(error instanceof Error ? error.message : "保存失败");
               }
-              onOpenChange(false);
             })}
           >
             <label className="space-y-2 md:col-span-2">
@@ -227,6 +234,7 @@ export const LedgerEntryDialog = ({
               <span className="text-sm font-medium">备注</span>
               <Textarea {...dividendForm.register("notes")} />
             </label>
+            {errorMessage && <div className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive md:col-span-2">{errorMessage}</div>}
             <div className="flex justify-end gap-3 md:col-span-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 取消
@@ -240,13 +248,18 @@ export const LedgerEntryDialog = ({
           <form
             className="grid gap-4 md:grid-cols-2"
             onSubmit={tradeForm.handleSubmit(async (values) => {
-              const payload = { ...values, tradeType: entryType as TradeType };
-              if (initialTrade && onUpdateTrade) {
-                await onUpdateTrade(initialTrade.id, payload);
-              } else {
-                await onCreateTrade(payload);
+              setErrorMessage("");
+              try {
+                const payload = { ...values, tradeType: entryType as TradeType };
+                if (initialTrade && onUpdateTrade) {
+                  await onUpdateTrade(initialTrade.id, payload);
+                } else {
+                  await onCreateTrade(payload);
+                }
+                onOpenChange(false);
+              } catch (error) {
+                setErrorMessage(error instanceof Error ? error.message : "保存失败");
               }
-              onOpenChange(false);
             })}
           >
             <label className="space-y-2 md:col-span-2">
@@ -295,6 +308,7 @@ export const LedgerEntryDialog = ({
               <span className="text-sm font-medium">备注</span>
               <Textarea {...tradeForm.register("notes")} />
             </label>
+            {errorMessage && <div className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive md:col-span-2">{errorMessage}</div>}
             <div className="flex justify-end gap-3 md:col-span-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 取消

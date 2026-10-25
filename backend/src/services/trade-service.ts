@@ -3,6 +3,9 @@ import { mapTradePage } from "./notion-mappers.js";
 import { normalizeTradePayload, type TradePayload } from "./validation.js";
 import { dateProperty, numberProperty, richText, selectProperty, title } from "../utils/notion-helpers.js";
 import { getDataSource } from "./data-source.js";
+import { HttpError } from "../utils/errors.js";
+import { findOversoldTrade } from "../utils/trade-ledger.js";
+import type { TradeRecord } from "../types/domain.js";
 import {
   createMysqlTrade,
   deleteMysqlTradeById,
@@ -26,14 +29,45 @@ export const listTrades = async () => {
     });
 };
 
+const validateTradeLedger = async (candidate: TradePayload, candidateId = "") => {
+  const existing = await listTrades();
+  const current = existing.find((trade) => trade.id === candidateId);
+  const nextTrades: TradeRecord[] = [
+    ...existing.filter((trade) => trade.id !== candidateId),
+    {
+      ...candidate,
+      id: candidateId || "__candidate__",
+      createdAt: current?.createdAt ?? new Date().toISOString(),
+    },
+  ];
+  const grouped = new Map<string, TradeRecord[]>();
+
+  for (const trade of nextTrades) {
+    const key = trade.stockCode.trim();
+    grouped.set(key, [...(grouped.get(key) ?? []), trade]);
+  }
+
+  for (const trades of grouped.values()) {
+    const invalid = findOversoldTrade(trades);
+    if (invalid) {
+      throw new HttpError(
+        400,
+        `卖出数量超过可用持仓：最多可卖 ${invalid.availableShares} 股。请先补录买入流水或修正交易日期。`,
+      );
+    }
+  }
+};
+
 export const createTrade = async (payload: TradePayload) => {
+  const data = normalizeTradePayload(payload);
+  await validateTradeLedger(data);
+
   if (getDataSource() === "mysql") {
-    await createMysqlTrade(payload);
+    await createMysqlTrade(data);
     return;
   }
 
   const { tradeDbId } = await ensureDatabases();
-  const data = normalizeTradePayload(payload);
 
   await createPage(tradeDbId, {
     记录标题: title(data.title),
@@ -50,12 +84,13 @@ export const createTrade = async (payload: TradePayload) => {
 };
 
 export const updateTradeById = async (id: string, payload: TradePayload) => {
+  const data = normalizeTradePayload(payload);
+  await validateTradeLedger(data, id);
+
   if (getDataSource() === "mysql") {
-    await updateMysqlTradeById(id, payload);
+    await updateMysqlTradeById(id, data);
     return;
   }
-
-  const data = normalizeTradePayload(payload);
 
   await updatePage(id, {
     记录标题: title(data.title),

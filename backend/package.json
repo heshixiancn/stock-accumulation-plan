@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
+    "test": "tsx --test src/utils/trade-ledger.test.ts",
     "data:export": "tsx src/scripts/export-data.ts",
     "data:import": "tsx src/scripts/import-data.ts",
     "data:migrate:notion-to-mysql": "tsx src/scripts/migrate-notion-to-mysql.ts",

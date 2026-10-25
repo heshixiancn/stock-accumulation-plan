@@ -25,15 +25,23 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "unknown error");
 
+const parseEastMoneyScaledPrice = (value: unknown, decimals: unknown) => {
+  const numericValue = Number(value ?? 0);
+  const numericDecimals = Number(decimals ?? 2);
+  const divisor = 10 ** (Number.isFinite(numericDecimals) ? numericDecimals : 2);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue / divisor : 0;
+};
+
 const fetchWithRetry = async (url: string, init: RequestInit, label: string) => {
   let lastError: unknown;
+  const requestUrl = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
 
   for (let attempt = 1; attempt <= MARKET_REQUEST_RETRIES + 1; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), MARKET_REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(requestUrl, {
         ...init,
         signal: controller.signal,
       });
@@ -138,6 +146,56 @@ const fetchEastMoneyQuoteMeta = async (stock: StockPlan) => {
   };
 };
 
+const fetchEastMoneyRealtimeQuote = async (stock: StockPlan): Promise<MarketQuote> => {
+  const query = new URLSearchParams({
+    secid: getEastMoneySecId(stock.stockCode),
+    fields: "f43,f57,f58,f59,f60,f126",
+  });
+  const response = await fetchWithRetry(
+    `https://push2.eastmoney.com/api/qt/stock/get?${query.toString()}`,
+    {
+      headers: {
+        Referer: "https://quote.eastmoney.com/",
+        "User-Agent": "stock-accumulator-notion/1.0",
+      },
+    },
+    "eastmoney realtime quote",
+  );
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  const data = (await response.json()) as {
+    data?: {
+      f43?: number;
+      f58?: string;
+      f59?: number;
+      f60?: number;
+      f126?: number;
+    } | null;
+  };
+  const quoteData = data.data;
+  const currentPrice = parseEastMoneyScaledPrice(quoteData?.f43, quoteData?.f59);
+  const previousClose = parseEastMoneyScaledPrice(quoteData?.f60, quoteData?.f59);
+  const price = currentPrice || previousClose;
+
+  if (!Number.isFinite(price) || price <= 0) throw new Error("invalid realtime quote");
+
+  const dividendYieldPercent = Number(quoteData?.f126 ?? 0);
+  const dividendYield = Number.isFinite(dividendYieldPercent) && dividendYieldPercent > 0
+    ? dividendYieldPercent / 100
+    : undefined;
+
+  return buildQuote(
+    stock,
+    price,
+    currentPrice > 0 ? "eastmoney-realtime" : "eastmoney-previous-close",
+    undefined,
+    quoteData?.f58,
+    previousClose > 0 ? previousClose : undefined,
+    dividendYield,
+  );
+};
+
 const fetchEastMoneyDailyCloseQuote = async (stock: StockPlan): Promise<MarketQuote> => {
   const query = new URLSearchParams({
     secid: getEastMoneySecId(stock.stockCode),
@@ -169,8 +227,11 @@ const fetchEastMoneyDailyCloseQuote = async (stock: StockPlan): Promise<MarketQu
       klines?: string[];
     };
   };
-  const latestKline = data.data?.klines?.[0];
-  const fields = latestKline?.split(",") ?? [];
+  const latestKline = (data.data?.klines ?? [])
+    .map((kline) => kline.split(","))
+    .filter((fields) => fields.length > 2 && Number(fields[2]) > 0)
+    .sort((a, b) => (b[0] ?? "").localeCompare(a[0] ?? ""))[0];
+  const fields = latestKline ?? [];
   const tradeDate = fields[0];
   const closePrice = Number(fields[2] ?? 0);
 
@@ -278,6 +339,12 @@ export const fetchStockMarketQuote = async (stock: StockPlan): Promise<MarketQuo
   const errors: string[] = [];
 
   try {
+    return await fetchEastMoneyRealtimeQuote(stock);
+  } catch (error) {
+    errors.push(`东方财富实时：${getErrorMessage(error)}`);
+  }
+
+  try {
     return await fetchEastMoneyDailyCloseQuote(stock);
   } catch (error) {
     errors.push(`东方财富日K：${getErrorMessage(error)}`);
@@ -359,13 +426,6 @@ const getEastMoneyGlobalSecIds = (target: AssetMarketTarget) => {
   }
 
   throw new HttpError(400, `暂不支持同步 ${target.market} 的行情。`);
-};
-
-const parseEastMoneyScaledPrice = (value: unknown, decimals: unknown) => {
-  const numericValue = Number(value ?? 0);
-  const numericDecimals = Number(decimals ?? 2);
-  const divisor = 10 ** (Number.isFinite(numericDecimals) ? numericDecimals : 2);
-  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue / divisor : 0;
 };
 
 const fetchYahooDailyCloseQuote = async (target: AssetMarketTarget): Promise<AssetMarketQuote> => {
