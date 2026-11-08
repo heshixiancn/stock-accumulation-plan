@@ -1,4 +1,9 @@
-export type StockStatus = "观察中" | "建仓中" | "持有中" | "已暂停";
+export type StockStatus = "观察中" | "持有中";
+
+export const normalizeStockStatus = (status: unknown, holdingShares: number): StockStatus =>
+  status === "持有中" || (holdingShares > 0 && (status === "建仓中" || status === "已暂停"))
+    ? "持有中"
+    : "观察中";
 export type TradeType = "买入" | "卖出";
 export type OtherInvestmentRecordType = TradeType | "分红";
 export type OtherInvestmentMarket = "A股" | "美股" | "港股";

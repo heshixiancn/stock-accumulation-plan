@@ -12,10 +12,10 @@ import type {
   NewIssueStatus,
   NewIssueType,
   StockPlan,
-  StockStatus,
   TradeRecord,
   TradeType,
 } from "../types/domain.js";
+import { normalizeStockStatus } from "../types/domain.js";
 import { getEffectiveDividendPerShare } from "../utils/dividend.js";
 import { percentage, roundTo } from "../utils/math.js";
 import { calculateNewIssueMetrics } from "./validation.js";
@@ -96,7 +96,7 @@ export const mapStockPage = (page: PageObjectResponse): StockPlan => {
     estimatedDividendAtTarget,
     estimatedDividendAtTargetYieldOnCapital,
     actualDividend: readNumber(page, "实际股息"),
-    status: (readSelect(page, "状态") || "观察中") as StockStatus,
+    status: normalizeStockStatus(readSelect(page, "状态"), holdingShares),
     notes: readRichText(page, "备注"),
     progress: percentage(holdingShares, targetShares),
     createdAt: page.created_time,

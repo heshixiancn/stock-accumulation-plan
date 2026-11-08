@@ -7,7 +7,7 @@ import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 
-const statusOptions: StockStatus[] = ["观察中", "建仓中", "持有中", "已暂停"];
+const statusOptions: StockStatus[] = ["观察中", "持有中"];
 
 type StockFormValues = Omit<
   StockPlan,

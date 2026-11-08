@@ -22,7 +22,7 @@ import {
 import type { DividendRecord, MarketSyncResult, StockPlan, StockStatus, TradeRecord } from "../types";
 import { aggregateDividendHistory, formatHoldingPeriod, getAdjustedCostPrice, getCurrentHoldingSince } from "../lib/investment";
 
-const statusFilters = ["全部", "观察中", "建仓中", "持有中", "已暂停"] as const;
+const statusFilters = ["全部", "观察中", "持有中"] as const;
 
 const getTonghuashunStockUrl = (stockCode: string) =>
   `https://stockpage.10jqka.com.cn/${encodeURIComponent(stockCode.trim())}/`;
@@ -39,17 +39,9 @@ const getStatusBadge = (stock: StockPlan) => {
       className: "border-sky-200 bg-sky-50 text-sky-700",
       dotClassName: "bg-sky-500",
     },
-    建仓中: {
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-      dotClassName: "bg-amber-500",
-    },
     持有中: {
       className: "border-emerald-200 bg-emerald-50 text-emerald-700",
       dotClassName: "bg-emerald-500",
-    },
-    已暂停: {
-      className: "border-stone-200 bg-stone-100 text-stone-700",
-      dotClassName: "bg-stone-500",
     },
   };
 

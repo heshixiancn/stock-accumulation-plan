@@ -5,7 +5,7 @@ export const OTHER_INVESTMENT_ASSET_DATABASE_TITLE = "其他投资标的";
 export const OTHER_INVESTMENT_DATABASE_TITLE = "其他投资记录";
 export const NEW_ISSUE_DATABASE_TITLE = "打新收益记录";
 
-export const STOCK_STATUS_OPTIONS = ["观察中", "建仓中", "持有中", "已暂停"] as const;
+export const STOCK_STATUS_OPTIONS = ["观察中", "持有中"] as const;
 export const TRADE_TYPE_OPTIONS = ["买入", "卖出"] as const;
 export const OTHER_INVESTMENT_RECORD_TYPE_OPTIONS = ["买入", "卖出", "分红"] as const;
 export const OTHER_INVESTMENT_MARKET_OPTIONS = ["A股", "美股", "港股"] as const;

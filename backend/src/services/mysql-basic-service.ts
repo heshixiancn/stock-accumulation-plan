@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2/promise";
-import type { DividendRecord, StockPlan, StockStatus, TradeRecord, TradeType } from "../types/domain.js";
+import { normalizeStockStatus, type DividendRecord, type StockPlan, type StockStatus, type TradeRecord, type TradeType } from "../types/domain.js";
 import { percentage, roundTo } from "../utils/math.js";
 import { execute, newId, queryRows } from "../lib/mysql.js";
 import {
@@ -85,7 +85,7 @@ const mapStockRow = (row: StockRow): StockPlan => {
     estimatedDividendAtTarget,
     estimatedDividendAtTargetYieldOnCapital: percentage(estimatedDividendAtTarget, estimatedTargetCapital),
     actualDividend,
-    status: row.status || "观察中",
+    status: normalizeStockStatus(row.status, holdingShares),
     notes: row.notes ?? "",
     progress: percentage(holdingShares, targetShares),
     createdAt: toDateTimeString(row.created_at),

@@ -4,7 +4,7 @@ import { fetchStockMarketQuote } from "./market-data-service.js";
 import { mapStockPage } from "./notion-mappers.js";
 import { applyPortfolioToStocks } from "./portfolio-service.js";
 import { listTrades } from "./trade-service.js";
-import type { MarketQuote, StockPlan } from "../types/domain.js";
+import { normalizeStockStatus, type MarketQuote, type StockPlan } from "../types/domain.js";
 import { normalizeStockPayload, type StockPayload } from "./validation.js";
 import { HttpError } from "../utils/errors.js";
 import { getDataSource } from "./data-source.js";
@@ -36,12 +36,10 @@ export const listStockPlans = async () => {
 export const listStocks = async () => {
   const [stocks, trades, dividends] = await Promise.all([listStockPlans(), listTrades(), listDividends()]);
   return applyPortfolioToStocks(stocks, trades, dividends).map((stock) => {
-    // A recorded buy creates an actual position. Reflect that in the list
-    // even when the legacy stock row still has its original "观察中" status.
-    if (stock.status === "观察中" && stock.holdingShares > 0) {
-      return { ...stock, status: "持有中" as const };
-    }
-    return stock;
+    // A fully closed position should no longer appear as held. Keep explicit
+    // paused/building states intact, but make the list reflect the actual
+    // position after the last sell is recorded.
+    return { ...stock, status: normalizeStockStatus(stock.status, stock.holdingShares) };
   });
 };
 

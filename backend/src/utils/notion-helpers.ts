@@ -49,9 +49,7 @@ export const stockDatabaseProperties: CreateDatabaseParameters["properties"] = {
     select: {
       options: [
         { name: "观察中", color: "gray" },
-        { name: "建仓中", color: "blue" },
         { name: "持有中", color: "green" },
-        { name: "已暂停", color: "red" },
       ],
     },
   },
